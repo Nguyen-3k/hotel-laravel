@@ -23,7 +23,12 @@
             
             <div class="md:col-span-3">
                 <h2 class="text-2xl font-black text-gray-900 mb-6 border-b pb-3">Form Đăng Ký Đặt Phòng</h2>
-                
+                @if(session('error'))
+            <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded shadow-sm" role="alert">
+                <p class="font-bold">Lỗi đặt phòng!</p>
+                <p>{{ session('error') }}</p>
+            </div>
+                @endif
                 <form action="/checkout" method="POST" class="space-y-4">
                     @csrf
                     <div>

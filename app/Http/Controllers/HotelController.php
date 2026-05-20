@@ -35,7 +35,7 @@ class HotelController extends Controller
         return view('booking', compact('rooms', 'selectedRoomId'));
     }
 
-    // 5. Logic xử lý khi khách ấn nút GỬI FORM ĐẶT PHÒNG
+// 5. Logic xử lý khi khách ấn nút GỬI FORM ĐẶT PHÒNG
     public function checkout(Request $request) {
         $request->validate([
             'room_id' => 'required|exists:rooms,id',
@@ -47,10 +47,32 @@ class HotelController extends Controller
 
         $room = Room::findOrFail($request->room_id);
 
+        // =========================================================
+        // BẮT ĐẦU CODE MỚI: KIỂM TRA TRÙNG LỊCH ĐẶT PHÒNG
+        // =========================================================
+        $isConflict = Booking::where('room_id', $request->room_id)
+            ->whereIn('status', ['pending', 'confirmed']) // Chỉ quét các đơn đang chờ hoặc đã chốt
+            ->where('check_in_date', '<', $request->check_out_date)
+            ->where('check_out_date', '>', $request->check_in_date)
+            ->exists();
+
+        // Nếu bị trùng, đá văng về trang trước kèm thông báo lỗi
+        if ($isConflict) {
+            return redirect()->back()->with('error', 'Rất tiếc! Phòng này đã có khách giữ chỗ trong khoảng thời gian bạn chọn. Vui lòng chọn ngày khác!');
+        }
+        // =========================================================
+        // KẾT THÚC CODE MỚI
+        // =========================================================
+
         // Tính toán số đêm và tổng tiền bằng thư viện Carbon có sẵn của Laravel
         $checkIn = Carbon::parse($request->check_in_date);
         $checkOut = Carbon::parse($request->check_out_date);
         $nights = $checkIn->diffInDays($checkOut);
+        
+        // Nếu khách đặt check-in và check-out cùng 1 ngày (0 đêm) thì tính là 1 đêm
+        if ($nights == 0) {
+            $nights = 1;
+        }
         $totalPrice = $nights * $room->price_per_night;
 
         // Lưu vào Database
@@ -63,12 +85,12 @@ class HotelController extends Controller
             'total_price' => $totalPrice,
         ]);
 
-        // Đổi trạng thái phòng thành đã được đặt để người khác không đặt trùng
+        // Đổi trạng thái phòng thành đã được đặt (booked)
         $room->update(['status' => 'booked']);
 
         return redirect('/rooms')->with('success', 'Đặt phòng thành công! Tổng tiền của bạn là: ' . number_format($totalPrice) . ' VNĐ.');
     }
-// 6. Logic trang Quản trị (Admin) + Thống kê
+    // 6. Logic trang Quản trị (Admin) + Thống kê
     public function admin() {
         // Lấy danh sách đơn đặt phòng
         $bookings = Booking::with('room')->orderBy('created_at', 'desc')->get();
