@@ -7,21 +7,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50 text-gray-800">
-    <header class="bg-emerald-800 text-white py-4 shadow-md">
-        <div class="container mx-auto flex justify-between items-center px-4">
-            <a href="/" class="text-xl font-bold tracking-wide">✨ THIÊN ÂN HOTEL</a>
-            <nav class="space-x-6 font-medium">
-                <a href="/" class="hover:text-yellow-400">Trang chủ</a>
-                <a href="/rooms" class="hover:text-yellow-400">Danh sách phòng</a>
-                <a href="/booking" class="hover:text-yellow-400">Đặt phòng</a>
-            </nav>
-        </div>
-    </header>
+    
+    @include('header')
 
     <main class="container mx-auto py-12 px-4 max-w-4xl">
         <div class="bg-white rounded-2xl shadow-xl overflow-hidden grid grid-cols-1 md:grid-cols-2 gap-8 p-6 md:p-8">
             <div>
-                <img src="{{ $room->image_url ?? 'https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=500' }}" alt="{{ $room->room_number }}" class="w-100 rounded-xl object-cover h-80 shadow-md">
+                <img src="{{ $room->image_url ?? 'https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=500' }}" alt="{{ $room->room_number }}" class="w-full rounded-xl object-cover h-80 shadow-md">
             </div>
             <div class="flex flex-col justify-between">
                 <div>
@@ -36,11 +28,7 @@
                     </div>
                 </div>
 
-                @if($room->status == 'available')
-                    <a href="/booking?room_id={{ $room->id }}" class="block text-center bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl hover:bg-emerald-800 shadow-md hover:shadow-lg transition">📅 ĐẶT PHÒNG NGAY</a>
-                @else
-                    <button disabled class="w-full bg-gray-300 text-gray-500 font-bold py-3 px-6 rounded-xl cursor-not-allowed">🔴 PHÒNG ĐÃ ĐƯỢC ĐẶT HẾT TẠI THỜI ĐIỂM NÀY</button>
-                @endif
+                <a href="/booking?room_id={{ $room->id }}" class="block text-center bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl hover:bg-emerald-800 shadow-md hover:shadow-lg transition">📅 ĐẶT PHÒNG NGAY</a>
             </div>
         </div>
     </main>

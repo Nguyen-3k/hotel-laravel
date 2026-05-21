@@ -11,7 +11,15 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Cấp phép cho SePay gửi dữ liệu vào webhook mà không bị chặn bởi CSRF Token
+        $middleware->validateCsrfTokens(except: [
+            'sepay/webhook', 
+        ]);
+
+        // Khai báo bí danh 'admin' cho middleware phân quyền
+        $middleware->alias([
+            'admin' => \App\Http\Middleware\CheckAdmin::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
