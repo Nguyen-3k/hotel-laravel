@@ -7,12 +7,29 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 text-gray-800">
-    <header class="bg-gray-900 text-white py-4 shadow-md">
+    
+    <header class="bg-gray-900 text-white py-4 shadow-md sticky top-0 z-50">
         <div class="container mx-auto flex justify-between items-center px-4">
-            <a href="/admin" class="text-xl font-bold tracking-wide text-yellow-500">⚙️ HỆ THỐNG QUẢN TRỊ ADMIN</a>
-            <nav class="space-x-4 text-sm">
-                <a href="/" class="hover:text-yellow-400 bg-gray-800 px-4 py-2 rounded-lg">Xem trang web khách</a>
-                <a href="/admin/rooms/create">Thêm phòng mới</a>
+            <a href="/admin" class="text-xl font-black tracking-wide text-yellow-500 hover:text-yellow-400 transition">
+                ⚙️ HỆ THỐNG QUẢN TRỊ
+            </a>
+            
+            <nav class="flex items-center space-x-6 text-sm font-medium">
+                <a href="/" class="hover:text-yellow-400 bg-gray-800 px-4 py-2 rounded-lg transition" target="_blank">
+                    🌍 Xem trang khách
+                </a>
+                
+                <div class="flex items-center space-x-4">
+                    <a href="/admin/rooms" class="hover:text-yellow-400 transition">🏨 Quản lý phòng</a>
+                    <a href="/admin/rooms/create" class="hover:text-yellow-400 transition">➕ Thêm phòng</a>
+                </div>
+
+                <form action="/logout" method="POST" class="border-l border-gray-700 pl-6 ml-2 m-0 flex items-center">
+                    @csrf
+                    <button type="submit" class="text-red-400 hover:text-red-300 font-bold flex items-center gap-2 transition cursor-pointer">
+                        <span>🚪</span> Đăng xuất
+                    </button>
+                </form>
             </nav>
         </div>
     </header>
@@ -43,6 +60,7 @@
                 <div class="bg-yellow-100 p-3 rounded-full text-2xl">⏳</div>
             </div>
         </div>
+        
         <h2 class="text-2xl font-black text-gray-800 mb-6">Danh sách Đơn Đặt Phòng Gần Đây</h2>
 
         @if(session('success'))

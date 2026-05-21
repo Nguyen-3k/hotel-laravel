@@ -5,14 +5,16 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Room;
 use App\Models\Booking;
+use App\Models\User; // Đã thêm Model User
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash; // Đã thêm thư viện mã hóa mật khẩu
 use Carbon\Carbon;
 
 class HotelController extends Controller
 {
     // 1. Logic trang chủ: Lấy ra 3 phòng ngẫu nhiên để hiển thị nổi bật
     public function index() {
-        $rooms = Room::where('status', 'available')->take(3)->get();
+        $rooms = Room::inRandomOrder()->take(3)->get();
         return view('index', compact('rooms'));
     }
 
@@ -28,101 +30,102 @@ class HotelController extends Controller
         return view('detail', compact('room'));
     }
 
-    // 4. Logic trang form đặt phòng (Tự động bắt ID phòng nếu khách bấm từ nút Xem chi tiết qua)
+    // 4. Logic trang form đặt phòng
     public function bookingForm(Request $request) {
-        $rooms = Room::where('status', 'available')->get();
+        $rooms = Room::all();
         $selectedRoomId = $request->query('room_id');
-        return view('booking', compact('rooms', 'selectedRoomId'));
+
+        $bookings = Booking::whereIn('status', ['pending', 'confirmed'])
+                           ->where('check_out_date', '>=', now()->toDateString())
+                           ->get(['room_id', 'check_in_date', 'check_out_date']);
+
+        $bookedDates = $bookings->groupBy('room_id')->map(function ($roomBookings) {
+            return $roomBookings->map(function ($booking) {
+                return [
+                    'from' => $booking->check_in_date,
+                    'to' => $booking->check_out_date
+                ];
+            });
+        });
+
+        return view('booking', compact('rooms', 'selectedRoomId', 'bookedDates'));
     }
 
-// 5. Logic xử lý khi khách ấn nút GỬI FORM ĐẶT PHÒNG
+    // 5. Logic xử lý khi khách ấn nút GỬI FORM ĐẶT PHÒNG
     public function checkout(Request $request) {
         $request->validate([
             'room_id' => 'required|exists:rooms,id',
             'customer_name' => 'required|string|max:255',
-            'customer_phone' => 'required|string',
+            'customer_phone' => ['required', 'regex:/^0[0-9]{9}$/'],
+            'customer_email' => ['nullable', 'email', 'ends_with:@gmail.com'],
             'check_in_date' => 'required|date|after_or_equal:today',
             'check_out_date' => 'required|date|after:check_in_date',
+        ], [
+            'customer_phone.regex' => 'Số điện thoại không hợp lệ! Vui lòng nhập đúng 10 số và bắt đầu bằng số 0.',
+            'customer_email.email' => 'Địa chỉ email không đúng định dạng.',
+            'customer_email.ends_with' => 'Hệ thống hiện tại chỉ hỗ trợ nhận email có đuôi @gmail.com.',
         ]);
 
         $room = Room::findOrFail($request->room_id);
 
-        // =========================================================
-        // BẮT ĐẦU CODE MỚI: KIỂM TRA TRÙNG LỊCH ĐẶT PHÒNG
-        // =========================================================
         $isConflict = Booking::where('room_id', $request->room_id)
-            ->whereIn('status', ['pending', 'confirmed']) // Chỉ quét các đơn đang chờ hoặc đã chốt
+            ->whereIn('status', ['pending', 'confirmed'])
             ->where('check_in_date', '<', $request->check_out_date)
             ->where('check_out_date', '>', $request->check_in_date)
             ->exists();
 
-        // Nếu bị trùng, đá văng về trang trước kèm thông báo lỗi
         if ($isConflict) {
             return redirect()->back()->with('error', 'Rất tiếc! Phòng này đã có khách giữ chỗ trong khoảng thời gian bạn chọn. Vui lòng chọn ngày khác!');
         }
-        // =========================================================
-        // KẾT THÚC CODE MỚI
-        // =========================================================
 
-        // Tính toán số đêm và tổng tiền bằng thư viện Carbon có sẵn của Laravel
         $checkIn = Carbon::parse($request->check_in_date);
         $checkOut = Carbon::parse($request->check_out_date);
         $nights = $checkIn->diffInDays($checkOut);
         
-        // Nếu khách đặt check-in và check-out cùng 1 ngày (0 đêm) thì tính là 1 đêm
         if ($nights == 0) {
             $nights = 1;
         }
         $totalPrice = $nights * $room->price_per_night;
 
-        // Lưu vào Database
-        Booking::create([
+        $booking = Booking::create([
             'room_id' => $request->room_id,
             'customer_name' => $request->customer_name,
             'customer_phone' => $request->customer_phone,
+            'customer_email' => $request->customer_email,
             'check_in_date' => $request->check_in_date,
             'check_out_date' => $request->check_out_date,
             'total_price' => $totalPrice,
         ]);
 
-        // Đổi trạng thái phòng thành đã được đặt (booked)
         $room->update(['status' => 'booked']);
 
-        return redirect('/rooms')->with('success', 'Đặt phòng thành công! Tổng tiền của bạn là: ' . number_format($totalPrice) . ' VNĐ.');
+        return redirect('/payment/' . $booking->id);
     }
+
     // 6. Logic trang Quản trị (Admin) + Thống kê
     public function admin() {
-        // Lấy danh sách đơn đặt phòng
         $bookings = Booking::with('room')->orderBy('created_at', 'desc')->get();
 
-        // THỐNG KÊ NHANH:
-        // 1. Tính tổng doanh thu (chỉ cộng tiền các đơn đã duyệt)
         $totalRevenue = Booking::where('status', 'confirmed')->sum('total_price');
-        
-        // 2. Đếm tổng số phòng đang có trong hệ thống
         $totalRooms = Room::count();
-        
-        // 3. Đếm số lượng đơn hàng đang chờ duyệt
         $pendingBookings = Booking::where('status', 'pending')->count();
 
-        // Gửi toàn bộ dữ liệu này ra ngoài giao diện
         return view('admin', compact('bookings', 'totalRevenue', 'totalRooms', 'pendingBookings'));
     }
-    // 8. Logic Admin: Duyệt/Hủy đơn đặt phòng và Nhả phòng trống
-// Logic Admin: Duyệt đơn đặt phòng
+
+    // 7. Logic Admin: Duyệt đơn đặt phòng
     public function confirmBooking($id) {
         $booking = Booking::findOrFail($id);
-        $booking->update(['status' => 'confirmed']); // Đổi trạng thái thành đã duyệt
+        $booking->update(['status' => 'confirmed']); 
         
         return redirect('/admin')->with('success', 'Đã duyệt thành công đơn đặt phòng #' . $id);
     }
 
-    // Logic Admin: Hủy đơn đặt phòng và Nhả phòng trống
+    // 8. Logic Admin: Hủy đơn đặt phòng và Nhả phòng trống
     public function cancelBooking($id) {
         $booking = Booking::findOrFail($id);
-        $booking->update(['status' => 'cancelled']); // Đổi trạng thái thành đã hủy
+        $booking->update(['status' => 'cancelled']); 
         
-        // Nhả phòng về trạng thái available
         $room = Room::find($booking->room_id);
         if ($room) {
             $room->update(['status' => 'available']);
@@ -130,21 +133,31 @@ class HotelController extends Controller
         
         return redirect('/admin')->with('error', 'Đã hủy đơn #' . $id . ' và tự động nhả phòng trống cho khách khác.');
     }
-// 9. Hiển thị form Đăng nhập
+
+    // =========================================================
+    // QUẢN LÝ TÀI KHOẢN (LOGIN / REGISTER / LOGOUT)
+    // =========================================================
+
+    // 9. Hiển thị form Đăng nhập
     public function loginForm() {
         return view('login');
     }
 
-    // 10. Xử lý khi bấm nút Đăng nhập
+    // 10. Xử lý Đăng nhập & Phân luồng
     public function login(Request $request) {
         $credentials = $request->only('email', 'password');
 
         if (Auth::attempt($credentials)) {
-            // Nếu email và pass đúng -> Cấp quyền vào /admin
-            return redirect('/admin');
+            $request->session()->regenerate();
+            
+            // Nếu là Admin -> Vào trang quản trị
+            if (Auth::user()->role === 'admin') {
+                return redirect('/admin');
+            }
+            // Nếu là Khách -> Về trang chủ
+            return redirect('/');
         }
 
-        // Nếu sai -> Đuổi về trang login kèm thông báo lỗi
         return redirect('/login')->with('error', 'Email hoặc mật khẩu không chính xác!');
     }
 
@@ -153,6 +166,80 @@ class HotelController extends Controller
         Auth::logout();
         return redirect('/login');
     }
+
+    // Hiển thị form Đăng ký
+    public function registerForm() {
+        return view('register');
+    }
+
+    // Xử lý Đăng ký
+    public function register(Request $request) {
+        // Kiểm tra dữ liệu hợp lệ
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:6',
+        ], [
+            'email.unique' => 'Email này đã được sử dụng!',
+            'password.min' => 'Mật khẩu phải có ít nhất 6 ký tự.'
+        ]);
+
+        // Tạo tài khoản mới (Mặc định role là customer do migration đã setup)
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+        ]);
+
+        // Đăng nhập luôn cho khách sau khi đăng ký thành công
+        Auth::login($user);
+
+        return redirect('/')->with('success', 'Đăng ký tài khoản thành công! Chào mừng bạn đến với Thiên Ân Hotel.');
+    }
+
+    // =========================================================
+    // QUẢN LÝ THÔNG TIN CÁ NHÂN (PROFILE & GIAO DỊCH)
+    // =========================================================
+
+    // Hiển thị giao diện Thông tin cá nhân
+    public function profile() {
+        return view('profile');
+    }
+
+    // Xử lý cập nhật thông tin cá nhân
+    public function updateProfile(Request $request) {
+        $user = Auth::user();
+        
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'password' => 'nullable|string|min:6', 
+        ]);
+
+        $user->name = $request->name;
+        
+        if ($request->filled('password')) {
+            $user->password = Hash::make($request->password);
+        }
+
+        $user->save();
+        return back()->with('success', 'Cập nhật thông tin thành công!');
+    }
+
+    // Xem lịch sử đặt phòng của khách hàng
+    public function myBookings() {
+        // Lấy danh sách các đơn trùng với email của tài khoản đang đăng nhập
+        $bookings = Booking::with('room')
+            ->where('customer_email', Auth::user()->email)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return view('my_bookings', compact('bookings'));
+    }
+
+    // =========================================================
+    // QUẢN LÝ PHÒNG DÀNH CHO ADMIN
+    // =========================================================
+
     // 12. Hiển thị form Thêm phòng mới
     public function createRoom() {
         return view('create_room');
@@ -160,28 +247,26 @@ class HotelController extends Controller
 
     // 13. Xử lý lưu phòng mới vào Database
     public function storeRoom(Request $request) {
-        // Kiểm tra dữ liệu đầu vào
         $request->validate([
-            'room_number' => 'required|unique:rooms,room_number', // Không được trùng số phòng cũ
+            'room_number' => 'required|unique:rooms,room_number',
             'room_type' => 'required',
             'price_per_night' => 'required|numeric',
             'image_url' => 'nullable|url',
             'description' => 'nullable'
         ]);
 
-        // Lưu vào CSDL
         Room::create([
             'room_number' => $request->room_number,
             'room_type' => $request->room_type,
             'price_per_night' => $request->price_per_night,
             'image_url' => $request->image_url,
             'description' => $request->description,
-            'status' => 'available' // Mặc định phòng mới tạo là còn trống
+            'status' => 'available' 
         ]);
 
-        // Thêm xong thì quay về trang chủ hoặc danh sách phòng để xem kết quả
-        return redirect('/rooms')->with('success', 'Đã thêm phòng ' . $request->room_number . ' thành công!');
+        return redirect('/admin/rooms')->with('success', 'Đã thêm phòng ' . $request->room_number . ' thành công!');
     }
+
     // 14. Hiển thị danh sách phòng (Giao diện Admin)
     public function manageRooms() {
         $rooms = Room::orderBy('created_at', 'desc')->get();
@@ -192,7 +277,6 @@ class HotelController extends Controller
     public function deleteRoom($id) {
         $room = Room::findOrFail($id);
         
-        // Kiểm tra xem phòng có đang có người đặt không, nếu có thì không cho xóa
         $hasBookings = Booking::where('room_id', $id)->whereIn('status', ['pending', 'confirmed'])->exists();
         if ($hasBookings) {
             return redirect('/admin/rooms')->with('error', 'Không thể xóa! Phòng này đang có khách đặt hoặc đang ở.');
@@ -201,6 +285,7 @@ class HotelController extends Controller
         $room->delete();
         return redirect('/admin/rooms')->with('success', 'Đã xóa phòng thành công!');
     }
+
     // 16. Hiển thị form Sửa phòng
     public function editRoom($id) {
         $room = Room::findOrFail($id);
@@ -211,7 +296,6 @@ class HotelController extends Controller
     public function updateRoom(Request $request, $id) {
         $room = Room::findOrFail($id);
         
-        // Kiểm tra dữ liệu. Lưu ý: Cho phép giữ nguyên số phòng hiện tại (bỏ qua check unique của chính nó)
         $request->validate([
             'room_number' => 'required|unique:rooms,room_number,' . $id,
             'room_type' => 'required',
@@ -220,7 +304,6 @@ class HotelController extends Controller
             'description' => 'nullable'
         ]);
 
-        // Cập nhật vào Database
         $room->update([
             'room_number' => $request->room_number,
             'room_type' => $request->room_type,
@@ -230,5 +313,69 @@ class HotelController extends Controller
         ]);
 
         return redirect('/admin/rooms')->with('success', 'Đã cập nhật thông tin phòng P.' . $room->room_number . ' thành công!');
+    }
+
+    // =========================================================
+    // THANH TOÁN VÀ TÌM KIẾM
+    // =========================================================
+
+    // 18. Trang Thanh Toán Trung Gian (Mô phỏng VNPay)
+    public function payment($id) {
+        $booking = Booking::findOrFail($id);
+        $deposit = $booking->total_price * 0.3;
+
+        $bankId = 'VCB'; 
+        $accountNo = '1234567890'; 
+        $accountName = 'NGUYEN VAN A'; 
+
+        $description = 'Thanh toan coc don ' . $booking->id;
+        $qrUrl = "https://img.vietqr.io/image/{$bankId}-{$accountNo}-compact.png?amount={$deposit}&addInfo=" . urlencode($description) . "&accountName=" . urlencode($accountName);
+
+        return view('payment', compact('booking', 'deposit', 'qrUrl'));
+    }
+
+    // 19. Xử lý khi khách bấm "Tôi đã chuyển khoản" (Giả lập Webhook)
+    public function confirmPayment($id) {
+        return redirect('/rooms')->with('success', 'Đã ghi nhận yêu cầu đặt phòng! Chúng tôi sẽ kiểm tra thanh toán và liên hệ với bạn trong giây lát.');
+    }
+
+    // 20. API Nhận biến động số dư từ SePay Webhook
+    public function sepayWebhook(Request $request) {
+        $content = strtoupper($request->input('content')); 
+        $amount = (int) $request->input('transferAmount');
+
+        if (preg_match('/DON\s+(\d+)/i', $content, $matches)) {
+            $bookingId = $matches[1];
+            $booking = Booking::find($bookingId);
+
+            if ($booking && $booking->status == 'pending') {
+                $booking->update(['status' => 'confirmed']);
+                return response()->json(['success' => true, 'message' => 'Đã duyệt đơn hàng tự động!']);
+            }
+        }
+
+        return response()->json(['success' => false, 'message' => 'Không tìm thấy đơn hàng hoặc đã được duyệt.']);
+    }
+
+    // 21. Thuật toán tìm kiếm phòng trống theo khoảng thời gian
+    public function searchRooms(Request $request) {
+        $checkIn = $request->input('check_in');
+        $checkOut = $request->input('check_out');
+
+        if (!$checkIn || !$checkOut) {
+            return redirect('/rooms');
+        }
+
+        $bookedRoomIds = Booking::whereIn('status', ['pending', 'confirmed'])
+            ->where('check_in_date', '<', $checkOut)
+            ->where('check_out_date', '>', $checkIn)
+            ->pluck('room_id') 
+            ->toArray();
+
+        $rooms = Room::whereNotIn('id', $bookedRoomIds)->get();
+
+        $message = "Hiển thị các phòng trống từ " . \Carbon\Carbon::parse($checkIn)->format('d/m/Y') . " đến " . \Carbon\Carbon::parse($checkOut)->format('d/m/Y');
+        
+        return view('rooms', compact('rooms'))->with('searchMessage', $message);
     }
 }
