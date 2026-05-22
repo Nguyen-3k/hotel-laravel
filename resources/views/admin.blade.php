@@ -137,6 +137,95 @@
                 </tbody>
             </table>
         </div>
+        <h2 class="text-2xl font-black text-gray-800 mb-6 mt-12">✉️ Yêu Cầu Đổi Email</h2>
+        <div class="bg-white rounded-xl shadow-md overflow-hidden mb-12">
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-gray-800 text-white text-sm uppercase">
+                    <tr>
+                        <th class="p-4 border-b">Khách Hàng</th>
+                        <th class="p-4 border-b">Email Hiện Tại</th>
+                        <th class="p-4 border-b text-center">Trạng Thái</th>
+                        <th class="p-4 border-b text-center">Hành Động</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm">
+                    @forelse($pendingEmails as $user)
+                        <tr class="hover:bg-gray-50 border-b">
+                            <td class="p-4 font-bold text-gray-700">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                                        {{ substr($user->name, 0, 1) }}
+                                    </div>
+                                    {{ $user->name }}
+                                </div>
+                            </td>
+                            <td class="p-4 text-gray-500">{{ $user->email }}</td>
+                            <td class="p-4 text-center">
+                                <span class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200">Đang chờ duyệt</span>
+                            </td>
+<td class="p-4 text-center flex justify-center gap-2">
+                                <form action="/admin/approve-email/{{ $user->id }}" method="POST">
+                                    @csrf
+                                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm">
+                                        ✅ Cấp quyền
+                                    </button>
+                                </form>
+                                
+                                <form action="/admin/reject-email/{{ $user->id }}" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn từ chối yêu cầu này không?');">
+                                    @csrf
+                                    <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm">
+                                        ❌ Từ chối
+                                    </button>
+                                </form>
+                            </td>
+                                                </tr>
+                    @empty
+                        <tr>
+                            <td colspan="4" class="p-8 text-center text-gray-500">Chưa có yêu cầu đổi email nào.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
     </main>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Lấy số lượng ban đầu khi vừa load trang
+            let currentEmailsCount = {{ count($pendingEmails) }};
+            let currentBookingsCount = {{ $pendingBookings }};
+
+            setInterval(function() {
+                fetch('/admin/check-new-data')
+                    .then(response => response.json())
+                    .then(data => {
+                        let hasNew = false;
+                        let msg = "";
+
+                        if(data.emails > currentEmailsCount) {
+                            hasNew = true;
+                            msg += "Có yêu cầu đổi Email mới! \n";
+                            currentEmailsCount = data.emails;
+                        }
+
+                        if(data.bookings > currentBookingsCount) {
+                            hasNew = true;
+                            msg += "Có đơn đặt phòng mới! \n";
+                            currentBookingsCount = data.bookings;
+                        }
+
+                        // Nếu phát hiện có dữ liệu mới -> Hiện Alert báo cho Quản lý
+                        if(hasNew) {
+                            // Tạo âm thanh (ting ting)
+                            let audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+                            audio.play();
+
+                            alert("🔔 THÔNG BÁO HỆ THỐNG:\n" + msg + "Vui lòng F5 lại trang để xử lý!");
+                            
+                            // Nếu muốn xịn hơn, bạn có thể gọi location.reload(); để nó tự F5 trang luôn
+                        }
+                    });
+            }, 5000); // 5000 mili-giây = 5 giây quét 1 lần
+        });
+    </script>
 </body>
 </html>
