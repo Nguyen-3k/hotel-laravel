@@ -45,6 +45,9 @@ Route::middleware('auth')->group(function () {
     
     // Khách hàng vào xem lịch sử các đơn họ đã đặt
     Route::get('/my-bookings', [HotelController::class, 'myBookings']); 
+    Route::post('/my-bookings/{id}/refund', [HotelController::class, 'requestRefund']);
+    // API Đánh dấu đã đọc thông báo
+    Route::post('/notifications/mark-all-read', [HotelController::class, 'markAllNotificationsAsRead']);
 });
 
 // ==============================================================
@@ -66,6 +69,8 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/admin/rooms/{id}/edit', [HotelController::class, 'editRoom']);
     Route::post('/admin/rooms/{id}/update', [HotelController::class, 'updateRoom']);
     Route::post('/admin/rooms/{id}/delete', [HotelController::class, 'deleteRoom']);
+    Route::post('/admin/booking/{id}/refund-confirm', [HotelController::class, 'confirmRefund']);
+    Route::post('/admin/booking/{id}/refund-deny', [HotelController::class, 'denyRefund']);
 
     Route::get('/admin/check-new-data', function() {
         $pendingEmails = App\Models\User::where('email_change_status', 'pending')->count();

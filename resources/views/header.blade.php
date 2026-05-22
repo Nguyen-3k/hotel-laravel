@@ -32,7 +32,7 @@
                         <button id="notiBtn" class="relative p-2 text-emerald-100 hover:text-white transition focus:outline-none cursor-pointer">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
                             @if($unreadCount > 0)
-                                <span class="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-emerald-800">
+                                <span id="unreadBadge" class="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-emerald-800">
                                     {{ $unreadCount }}
                                 </span>
                             @endif
@@ -41,11 +41,15 @@
                         <div id="notiDropdown" class="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100 hidden z-50">
                             <div class="px-4 py-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
                                 <h4 class="font-bold text-gray-800 text-sm">Thông báo mới</h4>
-                                <span class="text-xs text-emerald-600 cursor-pointer hover:underline">Đánh dấu đã đọc</span>
+                                @if($unreadCount > 0)
+                                    <span id="markAllReadBtn" class="text-xs text-emerald-600 cursor-pointer hover:underline font-bold">Đánh dấu đã đọc</span>
+                                @else
+                                    <span class="text-xs text-gray-400">Không có thông báo mới</span>
+                                @endif
                             </div>
                             <div class="max-h-80 overflow-y-auto">
                                 @forelse($notifications as $noti)
-                                    <div class="block px-4 py-3 border-b border-gray-50 transition {{ $noti->is_read ? 'bg-white opacity-70' : 'bg-emerald-50' }}">
+                                    <div class="block px-4 py-3 border-b border-gray-50 transition {{ $noti->is_read ? 'bg-white opacity-70' : 'bg-emerald-50 unread-item' }}">
                                         <p class="text-sm text-gray-800"><span class="font-bold text-emerald-700">{{ $noti->title }}:</span> {{ $noti->message }}</p>
                                         <p class="text-xs text-gray-400 mt-1">{{ $noti->created_at->diffForHumans() }}</p>
                                     </div>
@@ -130,7 +134,10 @@
     document.addEventListener('DOMContentLoaded', function() {
         const notiBtn = document.getElementById('notiBtn');
         const notiDropdown = document.getElementById('notiDropdown');
+        const markAllReadBtn = document.getElementById('markAllReadBtn');
+        const unreadBadge = document.getElementById('unreadBadge');
 
+        // Logic ẩn/hiện bảng thông báo
         if(notiBtn && notiDropdown) {
             notiBtn.addEventListener('click', function(e) {
                 e.stopPropagation(); 
@@ -141,6 +148,41 @@
                 if (!notiBtn.contains(e.target) && !notiDropdown.contains(e.target)) {
                     notiDropdown.classList.add('hidden');
                 }
+            });
+        }
+
+        // Logic đánh dấu đã đọc bằng AJAX
+        if(markAllReadBtn) {
+            markAllReadBtn.addEventListener('click', function(e) {
+                e.stopPropagation(); // Giữ bảng thông báo mở
+                
+                fetch('/notifications/mark-all-read', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if(data.success) {
+                        // Tắt huy hiệu chấm đỏ
+                        if(unreadBadge) unreadBadge.style.display = 'none';
+                        
+                        // Xóa nền xanh của các thông báo chưa đọc
+                        document.querySelectorAll('.unread-item').forEach(item => {
+                            item.classList.remove('bg-emerald-50', 'unread-item');
+                            item.classList.add('bg-white', 'opacity-70');
+                        });
+
+                        // Cập nhật giao diện nút
+                        markAllReadBtn.innerText = 'Đã đọc tất cả';
+                        markAllReadBtn.classList.add('text-gray-400', 'cursor-not-allowed', 'no-underline');
+                        markAllReadBtn.classList.remove('text-emerald-600', 'hover:underline', 'cursor-pointer');
+                    }
+                })
+                .catch(error => console.error('Lỗi:', error));
             });
         }
     });

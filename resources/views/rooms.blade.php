@@ -45,5 +45,6 @@
             @endforeach
         </div>
     </main>
+    @include('footer')
 </body>
 </html>

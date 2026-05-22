@@ -31,7 +31,7 @@
                 </div>
             @endif
 
-            <form action="/admin/rooms/store" method="POST" class="space-y-5">
+            <form action="/admin/rooms/store" method="POST" enctype="multipart/form-data" class="space-y-5">
                 @csrf
                 <div class="grid grid-cols-2 gap-4">
                     <div>
@@ -54,8 +54,8 @@
                 </div>
 
                 <div>
-                    <label class="block font-bold text-gray-700 mb-1">Link Ảnh minh họa (URL)</label>
-                    <input type="url" name="image_url" placeholder="https://..." class="w-full border border-gray-300 rounded p-2 focus:outline-emerald-700">
+                    <label class="block font-bold text-gray-700 mb-1">Ảnh minh họa phòng (Tải lên từ máy)</label>
+                    <input type="file" name="image_file" accept="image/*" class="w-full border border-gray-300 rounded p-2 focus:outline-emerald-700 bg-white" required>
                 </div>
 
                 <div>

@@ -5,14 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Thiên Ân Hotel - Trang Chủ</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&display=swap" rel="stylesheet">
 </head>
 <body class="bg-gray-50 text-gray-800">
 
     @include('header')
 
-    <section class="bg-emerald-900 text-white py-24 text-center px-4 bg-[url('https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=1200')] bg-cover bg-center bg-blend-overlay">
-        <h1 class="text-4xl md:text-5xl font-black mb-4">Chào mừng đến với Thiên Ân Hotel</h1>
-        <p class="text-lg text-emerald-100 max-w-xl mx-auto">Trải nghiệm dịch vụ nghỉ dưỡng cao cấp, không gian tinh tế và sang trọng bậc nhất.</p>
+    <section class="bg-400 text-white py-24 text-center px-4 bg-[url('https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=1200')] bg-cover bg-center bg-blend-overlay">
+        <div class="text-center z-10 relative px-4 mt-20">
+    
+        <h1 class="text-5xl md:text-7xl font-bold text-white mb-6 font-['Playfair_Display'] drop-shadow-[0_5px_5px_rgba(0,0,0,0.9)] tracking-wide italic">
+            Thiên Ân Hotel
+        </h1>
+    
+        <p class="text-lg md:text-2xl text-emerald-50 font-medium drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] max-w-2xl mx-auto mb-8">
+            Trải nghiệm không gian nghỉ dưỡng đẳng cấp và ấm cúng giữa lòng đại ngàn.
+        </p>
+    
+        <a href="/rooms" class="inline-block bg-yellow-500 hover:bg-yellow-400 text-emerald-900 font-black py-4 px-8 rounded-xl transition shadow-lg transform hover:-translate-y-1">
+            ĐẶT PHÒNG NGAY
+        </a>
+        </div>
     </section>
     
     <div class="container mx-auto px-4 mt-14 mb-1">
@@ -67,5 +80,6 @@
             @endforelse
         </div>
     </main>
+    @include('footer')
 </body>
 </html>

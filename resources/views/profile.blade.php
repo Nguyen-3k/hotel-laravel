@@ -160,5 +160,6 @@
             form.classList.toggle('active');
         });
     </script>
+        @include('footer')
 </body>
 </html>

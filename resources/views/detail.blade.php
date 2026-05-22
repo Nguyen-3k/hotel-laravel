@@ -13,7 +13,11 @@
     <main class="container mx-auto py-12 px-4 max-w-4xl">
         <div class="bg-white rounded-2xl shadow-xl overflow-hidden grid grid-cols-1 md:grid-cols-2 gap-8 p-6 md:p-8">
             <div>
-                <img src="{{ $room->image_url ?? 'https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=500' }}" alt="{{ $room->room_number }}" class="w-full rounded-xl object-cover h-80 shadow-md">
+                @if(Str::startsWith($room->image_url, 'http'))
+                    <img src="{{ $room->image_url }}" alt="Phòng {{ $room->room_number }}" class="w-full h-full object-cover rounded-xl">
+                @else
+                    <img src="{{ asset($room->image_url) }}" alt="Phòng {{ $room->room_number }}" class="w-full h-full object-cover rounded-xl">
+                @endif            
             </div>
             <div class="flex flex-col justify-between">
                 <div>
