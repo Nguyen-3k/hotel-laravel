@@ -5,6 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quản Trị Hệ Thống - Thiên Ân Hotel</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* CSS cho hóa đơn giống máy in KiotViet */
+        .receipt-print {
+            font-family: 'Courier New', Courier, monospace;
+            background: #fff;
+            color: #000;
+            width: 100%;
+            max-width: 350px;
+            margin: 0 auto;
+            padding: 15px;
+            border: 1px solid #ddd;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .receipt-print .dashed-line {
+            border-top: 1px dashed #000;
+            margin: 10px 0;
+        }
+    </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
     
@@ -61,17 +79,13 @@
             </div>
         </div>
         
-        <h2 class="text-2xl font-black text-gray-800 mb-6">Danh sách Đơn Đặt Phòng Gần Đây</h2>
+        <h2 class="text-2xl font-black text-gray-800 mb-6">Danh sách Đơn Đặt Phòng</h2>
 
         @if(session('success'))
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 font-bold">
-                ✅ {{ session('success') }}
-            </div>
+            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 font-bold">✅ {{ session('success') }}</div>
         @endif
         @if(session('error'))
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 font-bold">
-                ⚠️ {{ session('error') }}
-            </div>
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 font-bold">⚠️ {{ session('error') }}</div>
         @endif
 
         <div class="bg-white rounded-xl shadow-md overflow-hidden">
@@ -107,7 +121,11 @@
                                 @if($booking->status == 'pending')
                                     <span class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200">Chờ xác nhận</span>
                                 @elseif($booking->status == 'confirmed')
-                                    <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold border border-green-200">Đã duyệt</span>
+                                    <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-bold border border-blue-200">Đã cọc (Chờ đến)</span>
+                                @elseif($booking->status == 'checked_in')
+                                    <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold border border-green-200">Đang lưu trú</span>
+                                @elseif($booking->status == 'completed')
+                                    <span class="bg-gray-200 text-gray-800 px-3 py-1 rounded-full text-xs font-bold border border-gray-300">Đã trả phòng</span>
                                 @elseif($booking->status == 'refund_pending')
                                     <span class="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold border border-amber-200">Chờ hoàn tiền</span>
                                 @else
@@ -122,51 +140,45 @@
                                             @csrf
                                             <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow-sm">Duyệt</button>
                                         </form>
-                                        <form action="/admin/booking/{{ $booking->id }}/cancel" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn hủy đơn này không?');">
+                                        <form action="/admin/booking/{{ $booking->id }}/cancel" method="POST" onsubmit="return confirm('Hủy đơn này?');">
                                             @csrf
-                                            <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow-sm">Hủy đơn</button>
+                                            <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow-sm">Hủy</button>
                                         </form>
                                     </div>
 
-                                @elseif($booking->status == 'refund_pending')
-                                    <div class="text-left bg-amber-50 p-3 rounded-lg border border-amber-200 w-full max-w-xs mb-1">
-                                        <p class="text-xs font-bold text-amber-800">📌 Lý do hoàn trả:</p>
-                                        <p class="text-xs text-red-700 italic font-medium mb-2">"{{ $booking->refund_reason ?? 'Không ghi rõ lý do' }}"</p>
+                                @elseif($booking->status == 'confirmed')
+                                    <button onclick="openCheckinModal({{ $booking->id }}, '{{ $booking->customer_name }}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-xs font-bold transition shadow-sm w-full max-w-[120px]">
+                                        🛎️ Check-in
+                                    </button>
 
-                                        <p class="text-xs font-bold text-amber-800 border-t pt-1">🏦 Tài khoản nhận tiền:</p>
-                                        <p class="text-xs text-gray-700 font-mono mt-0.5">{{ $booking->bank_info }}</p>
-                                        @if($booking->refund_qr)
-                                            <a href="{{ asset($booking->refund_qr) }}" target="_blank" class="text-[11px] text-blue-600 font-bold hover:underline block mt-1">🖼️ Xem ảnh QR nhận tiền</a>
-                                        @endif
-                                    </div>
-                                    <div class="flex flex-col gap-1 w-full items-center">
-                                        <button onclick="showRefundActions({{ $booking->id }})" id="processBtn-{{ $booking->id }}" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow-sm w-full max-w-[120px]">
-                                            ⚙️ Xử lý hoàn trả
-                                        </button>
-                                        
-                                        <div id="refundActions-{{ $booking->id }}" class="hidden flex gap-1.5 mt-1">
-                                            <form action="/admin/booking/{{ $booking->id }}/refund-confirm" method="POST" onsubmit="return confirm('Xác nhận bạn ĐÃ chuyển khoản hoàn tiền cho khách?');">
-                                                @csrf
-                                                <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-[11px] font-bold transition shadow-sm">
-                                                    Đã hoàn tiền
-                                                </button>
+                                @elseif($booking->status == 'checked_in')
+                                    <button onclick="openCheckoutModal({{ $booking->id }}, '{{ $booking->customer_name }}', '{{ $booking->room->room_number ?? '' }}', '{{ \Carbon\Carbon::parse($booking->check_in_date)->format('d/m/Y') }}', '{{ \Carbon\Carbon::parse($booking->check_out_date)->format('d/m/Y') }}', {{ $booking->total_price }})" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-1.5 rounded text-xs font-bold transition shadow-sm w-full max-w-[120px]">
+                                        💳 Check-out
+                                    </button>
+                                    @if($booking->id_card_image)
+                                        <a href="{{ asset($booking->id_card_image) }}" target="_blank" class="text-[10px] text-blue-600 hover:underline">Xem giấy tờ</a>
+                                    @endif
+
+                                @elseif($booking->status == 'refund_pending')
+                                    <div class="text-left bg-amber-50 p-2 rounded border border-amber-200 w-full max-w-[150px]">
+                                        <button onclick="showRefundActions({{ $booking->id }})" id="processBtn-{{ $booking->id }}" class="bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 rounded text-xs font-bold w-full">Xử lý hoàn trả</button>
+                                        <div id="refundActions-{{ $booking->id }}" class="hidden flex flex-col gap-1 mt-1">
+                                            <form action="/admin/booking/{{ $booking->id }}/refund-confirm" method="POST" onsubmit="return confirm('Xác nhận đã chuyển khoản?');">
+                                                @csrf <button type="submit" class="bg-green-600 text-white px-2 py-1 rounded text-[11px] w-full">Đã hoàn tiền</button>
                                             </form>
-                                            <form action="/admin/booking/{{ $booking->id }}/refund-deny" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn TỪ CHỐI hoàn tiền?');">
-                                                @csrf
-                                                <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-[11px] font-bold transition shadow-sm">
-                                                    Từ chối
-                                                </button>
+                                            <form action="/admin/booking/{{ $booking->id }}/refund-deny" method="POST" onsubmit="return confirm('Từ chối hoàn tiền?');">
+                                                @csrf <button type="submit" class="bg-red-600 text-white px-2 py-1 rounded text-[11px] w-full">Từ chối</button>
                                             </form>
                                         </div>
                                     </div>
                                 @else
-                                    <span class="text-gray-400 text-xs italic">Đã xử lý xong</span>
+                                    <span class="text-gray-400 text-xs italic">Đã kết thúc</span>
                                 @endif
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="p-8 text-center text-gray-500">Chưa có đơn đặt phòng nào trong hệ thống.</td>
+                            <td colspan="6" class="p-8 text-center text-gray-500">Chưa có đơn đặt phòng nào.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -187,92 +199,144 @@
                 <tbody class="text-sm">
                     @forelse($pendingEmails as $user)
                         <tr class="hover:bg-gray-50 border-b">
-                            <td class="p-4 font-bold text-gray-700">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
-                                        {{ substr($user->name, 0, 1) }}
-                                    </div>
-                                    {{ $user->name }}
-                                </div>
-                            </td>
+                            <td class="p-4 font-bold text-gray-700">{{ $user->name }}</td>
                             <td class="p-4 text-gray-500">{{ $user->email }}</td>
-                            <td class="p-4 text-center">
-                                <span class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200">Đang chờ duyệt</span>
-                            </td>
+                            <td class="p-4 text-center"><span class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold">Đang chờ duyệt</span></td>
                             <td class="p-4 text-center flex justify-center gap-2">
                                 <form action="/admin/approve-email/{{ $user->id }}" method="POST">
-                                    @csrf
-                                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm">
-                                        ✅ Cấp quyền
-                                    </button>
+                                    @csrf <button class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs font-bold">Cấp quyền</button>
                                 </form>
-                                
-                                <form action="/admin/reject-email/{{ $user->id }}" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn từ chối yêu cầu này không?');">
-                                    @csrf
-                                    <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm">
-                                        ❌ Từ chối
-                                    </button>
+                                <form action="/admin/reject-email/{{ $user->id }}" method="POST">
+                                    @csrf <button class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-bold">Từ chối</button>
                                 </form>
                             </td>
                         </tr>
                     @empty
-                        <tr>
-                            <td colspan="4" class="p-8 text-center text-gray-500">Chưa có yêu cầu đổi email nào.</td>
-                        </tr>
+                        <tr><td colspan="4" class="p-8 text-center text-gray-500">Chưa có yêu cầu đổi email nào.</td></tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
     </main>
 
+    <div id="checkinModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+        <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-6">
+            <h3 class="text-lg font-black text-gray-900 mb-2">Thủ tục Nhận Phòng (Check-in)</h3>
+            <p class="text-sm text-gray-600 mb-4">Khách hàng: <span id="checkin_customer_name" class="font-bold text-blue-700"></span></p>
+            
+            <form id="checkinForm" method="POST" enctype="multipart/form-data" class="space-y-4">
+                @csrf
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Tải lên CCCD / Passport <span class="text-red-500">*</span></label>
+                    <input type="file" name="id_card_image" accept="image/*" class="w-full border border-gray-300 rounded p-2 text-sm bg-gray-50" required>
+                    <p class="text-xs text-gray-500 mt-1 italic">Vui lòng chụp rõ nét giấy tờ tùy thân của khách.</p>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeCheckinModal()" class="w-1/2 bg-gray-200 text-gray-800 font-bold py-2 rounded transition">Hủy</button>
+                    <button type="submit" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded transition shadow-md">Hoàn tất Check-in</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="checkoutModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+        <div class="bg-gray-200 w-full max-w-md rounded-xl shadow-2xl p-6">
+            
+            <div class="receipt-print" id="printArea">
+                <div class="text-center">
+                    <h2 class="font-black text-xl mb-1">THIÊN ÂN HOTEL</h2>
+                    <p class="text-xs">Đ/c: Ea Kao, Buôn Ma Thuột, Đắk Lắk</p>
+                    <p class="text-xs">SĐT: 0987.654.321</p>
+                </div>
+                
+                <div class="dashed-line"></div>
+                <h3 class="text-center font-bold text-lg my-2">HÓA ĐƠN THANH TOÁN</h3>
+                <div class="dashed-line"></div>
+
+                <div class="text-sm space-y-1 mb-4">
+                    <p><strong>Mã ĐĐP:</strong> #<span id="bill_id"></span></p>
+                    <p><strong>Khách hàng:</strong> <span id="bill_name"></span></p>
+                    <p><strong>Phòng:</strong> <span id="bill_room"></span></p>
+                    <p><strong>Ngày đến:</strong> <span id="bill_in"></span></p>
+                    <p><strong>Ngày đi:</strong> <span id="bill_out"></span></p>
+                </div>
+
+                <div class="dashed-line"></div>
+                
+                <div class="flex justify-between font-bold text-sm">
+                    <span>Tổng tiền (Đã gồm phụ thu):</span>
+                    <span id="bill_total"></span>
+                </div>
+                <div class="flex justify-between text-sm mt-1">
+                    <span>Đã cọc trực tuyến (30%):</span>
+                    <span id="bill_deposit"></span>
+                </div>
+
+                <div class="dashed-line"></div>
+
+                <div class="flex justify-between font-black text-lg mt-2">
+                    <span>CẦN THANH TOÁN:</span>
+                    <span id="bill_remaining"></span>
+                </div>
+                
+                <div class="text-center mt-6 text-xs italic">
+                    <p>Cảm ơn quý khách và hẹn gặp lại!</p>
+                    <p>Powered by Thien An System</p>
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-6">
+                <button type="button" onclick="closeCheckoutModal()" class="w-1/3 bg-gray-400 text-white font-bold py-2 rounded transition">Quay lại</button>
+                
+                <form id="checkoutForm" method="POST" class="w-2/3 m-0">
+                    @csrf
+                    <button type="submit" onclick="return confirm('Xác nhận đã thu đủ tiền và trả phòng?')" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded transition shadow-md">
+                        💸 Đã Thu Tiền & Check-out
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Hàm hiển thị 2 nút hoàn tiền
+        // Các hàm phụ trợ Modal
         function showRefundActions(id) {
             const actionDiv = document.getElementById('refundActions-' + id);
-            const processBtn = document.getElementById('processBtn-' + id);
-            if(actionDiv) {
-                actionDiv.classList.toggle('hidden');
-                
-                if(!actionDiv.classList.contains('hidden')) {
-                    processBtn.innerText = '❌ Đóng lựa chọn';
-                    processBtn.classList.replace('bg-amber-500', 'bg-gray-500');
-                    processBtn.classList.replace('hover:bg-amber-600', 'hover:bg-gray-600');
-                } else {
-                    processBtn.innerText = '⚙️ Xử lý hoàn trả';
-                    processBtn.classList.replace('bg-gray-500', 'bg-amber-500');
-                    processBtn.classList.replace('hover:bg-gray-600', 'hover:bg-amber-600');
-                }
-            }
+            actionDiv.classList.toggle('hidden');
         }
 
-        // ===============================================
-        // RADAR QUÉT THÔNG BÁO TỰ ĐỘNG RELOAD TRANG ADMIN
-        // ===============================================
-            document.addEventListener('DOMContentLoaded', function() {
-            // Lấy số lượng thông báo chưa đọc ban đầu
-            let currentAdminUnread = {{ \App\Models\Notification::whereNull('user_id')->where('is_read', false)->count() }};
-            
-            setInterval(function() {
-                fetch('/admin/check-new-data')
-                    .then(response => response.json())
-                    .then(data => {
-                        // Nếu số lượng trên DB lớn hơn số hiện tại -> Có biến mới!
-                        if(data.count > currentAdminUnread) {
-                            
-                            // Phát âm thanh
-                            let audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-                            audio.play().catch(e => console.log("Trình duyệt chặn âm thanh"));
-                            
-                            // Cập nhật lại số mốc
-                            currentAdminUnread = data.count;
-                            
-                            // Reload trang để cập nhật Bảng Đơn hàng và Bảng Hoàn tiền
-                            window.location.reload();
-                        }
-                    })
-                    .catch(e => console.error("Lỗi đồng bộ Admin:", e));
-            }, 3000); 
-        });
-            </script>
+        // Logic Modal Check-in
+        function openCheckinModal(id, name) {
+            document.getElementById('checkin_customer_name').innerText = name;
+            document.getElementById('checkinForm').action = '/admin/booking/' + id + '/check-in';
+            document.getElementById('checkinModal').classList.remove('hidden');
+        }
+        function closeCheckinModal() {
+            document.getElementById('checkinModal').classList.add('hidden');
+        }
+
+        // Logic Modal Check-out (Tính toán tiền 30/70)
+        function openCheckoutModal(id, name, room, checkIn, checkOut, totalAmount) {
+            document.getElementById('bill_id').innerText = id;
+            document.getElementById('bill_name').innerText = name;
+            document.getElementById('bill_room').innerText = room;
+            document.getElementById('bill_in').innerText = checkIn;
+            document.getElementById('bill_out').innerText = checkOut;
+
+            // Tính tiền Cọc 30% và Còn lại 70%
+            let deposit = Math.round(totalAmount * 0.3);
+            let remaining = totalAmount - deposit;
+
+            document.getElementById('bill_total').innerText = totalAmount.toLocaleString() + 'đ';
+            document.getElementById('bill_deposit').innerText = '-' + deposit.toLocaleString() + 'đ';
+            document.getElementById('bill_remaining').innerText = remaining.toLocaleString() + 'đ';
+
+            document.getElementById('checkoutForm').action = '/admin/booking/' + id + '/check-out';
+            document.getElementById('checkoutModal').classList.remove('hidden');
+        }
+        function closeCheckoutModal() {
+            document.getElementById('checkoutModal').classList.add('hidden');
+        }
+    </script>
 </body>
 </html>

@@ -13,4 +13,16 @@ class Room extends Model
     {
         return $this->hasMany(Booking::class);
     }
+    public function images() {
+        return $this->hasMany(RoomImage::class);
+    }
+
+    public function reviews() {
+        return $this->hasMany(Review::class);
+    }
+    
+    // Hàm tính điểm đánh giá trung bình
+    public function averageRating() {
+        return $this->reviews()->avg('rating') ?: 0;
+    }
 }
