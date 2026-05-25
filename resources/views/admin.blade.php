@@ -130,13 +130,15 @@
 
                                 @elseif($booking->status == 'refund_pending')
                                     <div class="text-left bg-amber-50 p-3 rounded-lg border border-amber-200 w-full max-w-xs mb-1">
-                                        <p class="text-xs font-bold text-amber-800">🏦 Thông tin hoàn trả:</p>
+                                        <p class="text-xs font-bold text-amber-800">📌 Lý do hoàn trả:</p>
+                                        <p class="text-xs text-red-700 italic font-medium mb-2">"{{ $booking->refund_reason ?? 'Không ghi rõ lý do' }}"</p>
+
+                                        <p class="text-xs font-bold text-amber-800 border-t pt-1">🏦 Tài khoản nhận tiền:</p>
                                         <p class="text-xs text-gray-700 font-mono mt-0.5">{{ $booking->bank_info }}</p>
                                         @if($booking->refund_qr)
                                             <a href="{{ asset($booking->refund_qr) }}" target="_blank" class="text-[11px] text-blue-600 font-bold hover:underline block mt-1">🖼️ Xem ảnh QR nhận tiền</a>
                                         @endif
                                     </div>
-
                                     <div class="flex flex-col gap-1 w-full items-center">
                                         <button onclick="showRefundActions({{ $booking->id }})" id="processBtn-{{ $booking->id }}" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow-sm w-full max-w-[120px]">
                                             ⚙️ Xử lý hoàn trả
@@ -224,41 +226,7 @@
     </main>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            let currentEmailsCount = {{ count($pendingEmails) }};
-            let currentBookingsCount = {{ $pendingBookings }};
-
-            setInterval(function() {
-                fetch('/admin/check-new-data')
-                    .then(response => response.json())
-                    .then(data => {
-                        let hasNew = false;
-                        let msg = "";
-
-                        if(data.emails > currentEmailsCount) {
-                            hasNew = true;
-                            msg += "Có yêu cầu đổi Email mới! \n";
-                            currentEmailsCount = data.emails;
-                        }
-
-                        if(data.bookings > currentBookingsCount) {
-                            hasNew = true;
-                            msg += "Có đơn đặt phòng mới! \n";
-                            currentBookingsCount = data.bookings;
-                        }
-
-                        if(hasNew) {
-                            let audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-                            audio.play().catch(e => console.log("Trình duyệt chặn autoplay âm thanh"));
-
-                            alert("🔔 THÔNG BÁO HỆ THỐNG:\n" + msg + "Vui lòng F5 lại trang để xử lý!");
-                        }
-                    })
-                    .catch(e => console.error("Lỗi cập nhật real-time:", e));
-            }, 5000); 
-        });
-
-        // Hàm JavaScript hỗ trợ hiển thị 2 nút hoàn tiền
+        // Hàm hiển thị 2 nút hoàn tiền
         function showRefundActions(id) {
             const actionDiv = document.getElementById('refundActions-' + id);
             const processBtn = document.getElementById('processBtn-' + id);
@@ -276,6 +244,35 @@
                 }
             }
         }
-    </script>
+
+        // ===============================================
+        // RADAR QUÉT THÔNG BÁO TỰ ĐỘNG RELOAD TRANG ADMIN
+        // ===============================================
+            document.addEventListener('DOMContentLoaded', function() {
+            // Lấy số lượng thông báo chưa đọc ban đầu
+            let currentAdminUnread = {{ \App\Models\Notification::whereNull('user_id')->where('is_read', false)->count() }};
+            
+            setInterval(function() {
+                fetch('/admin/check-new-data')
+                    .then(response => response.json())
+                    .then(data => {
+                        // Nếu số lượng trên DB lớn hơn số hiện tại -> Có biến mới!
+                        if(data.count > currentAdminUnread) {
+                            
+                            // Phát âm thanh
+                            let audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+                            audio.play().catch(e => console.log("Trình duyệt chặn âm thanh"));
+                            
+                            // Cập nhật lại số mốc
+                            currentAdminUnread = data.count;
+                            
+                            // Reload trang để cập nhật Bảng Đơn hàng và Bảng Hoàn tiền
+                            window.location.reload();
+                        }
+                    })
+                    .catch(e => console.error("Lỗi đồng bộ Admin:", e));
+            }, 3000); 
+        });
+            </script>
 </body>
 </html>

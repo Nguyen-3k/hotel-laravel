@@ -33,21 +33,30 @@
 
             <form action="/admin/rooms/store" method="POST" enctype="multipart/form-data" class="space-y-5">
                 @csrf
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <label class="block font-bold text-gray-700 mb-1">Số phòng (VD: 401)</label>
-                        <input type="text" name="room_number" class="w-full border border-gray-300 rounded p-2 focus:outline-emerald-700" required>
+                        <label class="block font-bold text-gray-700 mb-1">Số phòng</label>
+                        <input type="text" name="room_number" value="{{ $room->room_number ?? old('room_number') }}" class="w-full border border-gray-300 rounded p-2 focus:outline-blue-600" required>
                     </div>
                     <div>
-                        <label class="block font-bold text-gray-700 mb-1">Loại phòng</label>
-                        <select name="room_type" class="w-full border border-gray-300 rounded p-2 focus:outline-emerald-700">
-                            <option value="Standard">Standard (Tiêu chuẩn)</option>
-                            <option value="Deluxe">Deluxe (Cao cấp)</option>
-                            <option value="VIP">VIP (Thương gia)</option>
+                        <label class="block font-bold text-gray-700 mb-1">Hạng phòng</label>
+                        <select name="room_type" class="w-full border border-gray-300 rounded p-2 focus:outline-blue-600" required>
+                            <option value="Standard" {{ isset($room) && $room->room_type == 'Standard' ? 'selected' : '' }}>Standard</option>
+                            <option value="Deluxe" {{ isset($room) && $room->room_type == 'Deluxe' ? 'selected' : '' }}>Deluxe</option>
+                            <option value="VIP" {{ isset($room) && $room->room_type == 'VIP' ? 'selected' : '' }}>VIP</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-gray-700 mb-1">Cấu hình giường</label>
+                        <select name="bed_type" class="w-full border border-gray-300 rounded p-2 focus:outline-blue-600" required>
+                            <option value="1 giường đơn" {{ isset($room) && $room->bed_type == '1 giường đơn' ? 'selected' : '' }}>1 Giường Đơn</option>
+                            <option value="1 giường đôi" {{ isset($room) && $room->bed_type == '1 giường đôi' ? 'selected' : '' }}>1 Giường Đôi</option>
+                            <option value="2 giường đơn" {{ isset($room) && $room->bed_type == '2 giường đơn' ? 'selected' : '' }}>2 Giường Đơn</option>
+                            <option value="2 giường đôi" {{ isset($room) && $room->bed_type == '2 giường đôi' ? 'selected' : '' }}>2 Giường Đôi</option>
+                            <option value="1 giường đôi 1 giường đơn" {{ isset($room) && $room->bed_type == '1 giường đôi 1 giường đơn' ? 'selected' : '' }}>1 Giường Đôi, 1 Giường Đơn</option>
                         </select>
                     </div>
                 </div>
-
                 <div>
                     <label class="block font-bold text-gray-700 mb-1">Giá mỗi đêm (VNĐ)</label>
                     <input type="number" name="price_per_night" class="w-full border border-gray-300 rounded p-2 focus:outline-emerald-700" required>

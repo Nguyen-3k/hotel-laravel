@@ -105,7 +105,7 @@
                                             <span>📜</span> Danh sách giao dịch
                                         </a>
                                         
-                                        <a href="#hoan-tien" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition">
+                                        <a href="/my-bookings" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition">
                                             <span>💰</span> Hoàn tiền
                                         </a>
                                     @endif
@@ -187,3 +187,70 @@
         }
     });
 </script>
+
+@auth
+    @if(Auth::user()->role !== 'admin')
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                let currentUnread = {{ $unreadCount ?? 0 }};
+                
+                setInterval(function() {
+                    fetch('/notifications/check-customer')
+                        .then(response => response.json())
+                        .then(data => {
+                            // Nếu có thông báo mới (Số trên database lớn hơn số đang hiện)
+                            if(data.count > currentUnread) {
+                                
+                                // 1. Phát âm thanh Ting Ting
+                                let audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+                                audio.play().catch(e => console.log("Trình duyệt chặn autoplay"));
+                                
+                                // KHÔNG DÙNG ALERT NỮA, BẮT ĐẦU TỰ ĐỘNG CẬP NHẬT GIAO DIỆN
+                                
+                                // 2. Cập nhật con số ở chấm đỏ
+                                let badge = document.getElementById('unreadBadge');
+                                let notiBtn = document.getElementById('notiBtn');
+                                
+                                if (!badge && data.count > 0) {
+                                    // Nếu chưa có chấm đỏ thì tạo mới
+                                    notiBtn.insertAdjacentHTML('beforeend', `<span id="unreadBadge" class="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-emerald-800">${data.count}</span>`);
+                                } else if (badge) {
+                                    // Nếu có rồi thì đổi số
+                                    badge.innerText = data.count;
+                                    badge.style.display = 'block';
+                                }
+
+                                // 3. Tự động vẽ lại danh sách thông báo thả xuống
+                                let listContainer = document.querySelector('#notiDropdown .max-h-80');
+                                if (listContainer && data.notifications) {
+                                    listContainer.innerHTML = ''; // Xóa sạch thông báo cũ
+                                    
+                                    data.notifications.forEach(noti => {
+                                        let bgClass = noti.is_read ? 'bg-white opacity-70' : 'bg-emerald-50 unread-item';
+                                        // Bơm mã HTML mới vào
+                                        listContainer.innerHTML += `
+                                            <div class="block px-4 py-3 border-b border-gray-50 transition ${bgClass}">
+                                                <p class="text-sm text-gray-800"><span class="font-bold text-emerald-700">${noti.title}:</span> ${noti.message}</p>
+                                                <p class="text-xs text-gray-400 mt-1">${noti.time}</p>
+                                            </div>
+                                        `;
+                                    });
+                                }
+
+                                // 4. Khôi phục nút "Đánh dấu đã đọc"
+                                let markReadBtn = document.getElementById('markAllReadBtn');
+                                if (markReadBtn && data.count > 0) {
+                                    markReadBtn.innerText = 'Đánh dấu đã đọc';
+                                    markReadBtn.className = 'text-xs text-emerald-600 cursor-pointer hover:underline font-bold';
+                                }
+                                
+                                // Cập nhật lại mốc để không báo trùng
+                                currentUnread = data.count;
+                            }
+                        })
+                        .catch(e => console.error("Lỗi đồng bộ Real-time:", e));
+                }, 4000); // Quét 4 giây 1 lần cho lẹ
+            });
+        </script>
+    @endif
+@endauth

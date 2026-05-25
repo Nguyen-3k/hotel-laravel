@@ -53,7 +53,24 @@
                     <img src="{{ $qrUrl }}" alt="Mã QR Thanh Toán" class="w-64 h-64 object-contain relative z-10">
                 </div>
 
-                <p class="text-xs text-gray-400 mb-6">Nội dung CK: <strong class="text-gray-800">Thanh toan coc don {{ $booking->id }}</strong></p>
+                <div class="w-full text-left bg-white p-4 rounded-xl border border-gray-200 mb-6 text-sm shadow-sm">
+                    <div class="flex justify-between mb-2">
+                        <span class="text-gray-500">Ngân hàng:</span>
+                        <span class="font-bold text-gray-800">MB Bank</span>
+                    </div>
+                    <div class="flex justify-between mb-2">
+                        <span class="text-gray-500">Chủ tài khoản:</span>
+                        <span class="font-bold text-gray-800">VI CONG NGUYEN</span>
+                    </div>
+                    <div class="flex justify-between mb-2">
+                        <span class="text-gray-500">Số tài khoản:</span>
+                        <span class="font-bold text-emerald-700 tracking-wider">9704229206534913427</span>
+                    </div>
+                    <div class="flex justify-between pt-2 border-t border-gray-200 mt-2">
+                        <span class="text-gray-500">Nội dung CK:</span>
+                        <span class="font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded">Thanh toan coc don {{ $booking->id }}</span>
+                    </div>
+                </div>
 
                 <form action="/payment/{{ $booking->id }}/confirm" method="POST" class="w-full">
                     @csrf

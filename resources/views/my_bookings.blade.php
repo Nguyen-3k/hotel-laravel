@@ -98,20 +98,34 @@
                             </button>
                         </div>
                         
-                        <form id="refundForm-{{ $booking->id }}" action="/my-bookings/{{ $booking->id }}/refund" method="POST" enctype="multipart/form-data" class="hidden mt-4 bg-white p-5 rounded-xl border-2 border-red-100 shadow-inner text-left">
+                        <form id="refundForm-{{ $booking->id }}" action="/my-bookings/{{ $booking->id }}/refund" method="POST" enctype="multipart/form-data" class="hidden mt-4 bg-white p-5 rounded-xl border-2 border-red-100 shadow-inner text-left space-y-4">
                             @csrf
-                            <h5 class="text-red-700 font-bold text-sm mb-3">Vui lòng cung cấp thông tin nhận tiền:</h5>
-                            <div class="mb-3">
-                                <label class="block text-xs font-bold text-gray-700 mb-1">Số TK - Tên chủ thẻ - Tên ngân hàng <span class="text-red-500">*</span></label>
+                            <h5 class="text-red-700 font-bold text-sm border-b pb-2 flex items-center gap-1.5">🔒 Xác thực yêu cầu hoàn trả tiền</h5>
+                            
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 mb-1">Lý do xin hoàn tiền <span class="text-red-500">*</span></label>
+                                <textarea name="refund_reason" rows="2" placeholder="Vui lòng ghi rõ lý do hủy phòng (Ví dụ: Thay đổi lịch trình đột xuất, có việc bận gia đình...)" class="w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-red-500" required></textarea>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 mb-1">Thông tin ngân hàng nhận lại tiền <span class="text-red-500">*</span></label>
                                 <textarea name="bank_info" rows="2" placeholder="Ví dụ: 97042292... - NGUYEN VAN A - Vietcombank" class="w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-red-500" required></textarea>
                             </div>
-                            <div class="mb-4">
+
+                            <div>
                                 <label class="block text-xs font-bold text-gray-700 mb-1">Tải ảnh mã QR nhận tiền (Nếu có):</label>
                                 <input type="file" name="refund_qr" accept="image/*" class="w-full border border-gray-300 rounded-lg p-1.5 text-xs bg-gray-50">
                             </div>
-                            <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-6 rounded-lg text-xs transition shadow-md w-full md:w-auto">
-                                Xác nhận gửi yêu cầu
-                            </button>
+
+                            <div class="pt-2 border-t border-gray-100 flex flex-col md:flex-row gap-3 items-end">
+                                <div class="w-full md:w-2/3">
+                                    <label class="block text-xs font-bold text-red-700 mb-1">Nhập mật khẩu tài khoản của bạn để xác nhận <span class="text-red-500">*</span></label>
+                                    <input type="password" name="password" placeholder="Nhập mật khẩu hiện tại để bảo mật..." class="w-full border border-red-300 rounded-lg p-2.5 text-sm bg-white focus:outline-red-500" required>
+                                </div>
+                                <button type="submit" class="w-full md:w-1/3 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-6 h-[42px] rounded-lg text-xs transition shadow-md whitespace-nowrap cursor-pointer">
+                                    GỬI YÊU CẦU HOÀN TIỀN
+                                </button>
+                            </div>
                         </form>
                     @endif
 

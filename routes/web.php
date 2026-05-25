@@ -48,6 +48,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/my-bookings/{id}/refund', [HotelController::class, 'requestRefund']);
     // API Đánh dấu đã đọc thông báo
     Route::post('/notifications/mark-all-read', [HotelController::class, 'markAllNotificationsAsRead']);
+    // API Quét thông báo mới cho Khách hàng (Real-time)
+    Route::get('/notifications/check-customer', [HotelController::class, 'checkCustomerNoti']);
 });
 
 // ==============================================================

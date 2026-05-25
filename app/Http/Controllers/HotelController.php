@@ -9,7 +9,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash; 
 use Carbon\Carbon;
-use App\Models\Notification; // Đã tích hợp Model Notification
+use App\Models\Notification;
 
 class HotelController extends Controller
 {
@@ -52,7 +52,7 @@ class HotelController extends Controller
         return view('booking', compact('rooms', 'selectedRoomId', 'bookedDates'));
     }
 
-    // 5. Logic xử lý khi khách ấn nút GỬI FORM ĐẶT PHÒNG
+    // 5. Logic xử lý khi khách ấn nút GỬI FORM ĐẶT PHÒNG (ĐÃ CẬP NHẬT LẤY SỐ NGƯỜI, SỐ PHÒNG, PHỤ THU)
     public function checkout(Request $request) {
         $request->validate([
             'room_id' => 'required|exists:rooms,id',
@@ -61,6 +61,9 @@ class HotelController extends Controller
             'customer_email' => ['nullable', 'email', 'ends_with:@gmail.com'],
             'check_in_date' => 'required|date|after_or_equal:today',
             'check_out_date' => 'required|date|after:check_in_date',
+            'room_count' => 'required|integer|min:1',
+            'guest_count' => 'required|integer|min:1',
+            'calculated_total' => 'required|numeric' // Validate tổng tiền lấy từ JS
         ], [
             'customer_phone.regex' => 'Số điện thoại không hợp lệ! Vui lòng nhập đúng 10 số và bắt đầu bằng số 0.',
             'customer_email.email' => 'Địa chỉ email không đúng định dạng.',
@@ -79,15 +82,7 @@ class HotelController extends Controller
             return redirect()->back()->with('error', 'Rất tiếc! Phòng này đã có khách giữ chỗ trong khoảng thời gian bạn chọn. Vui lòng chọn ngày khác!');
         }
 
-        $checkIn = Carbon::parse($request->check_in_date);
-        $checkOut = Carbon::parse($request->check_out_date);
-        $nights = $checkIn->diffInDays($checkOut);
-        
-        if ($nights == 0) {
-            $nights = 1;
-        }
-        $totalPrice = $nights * $room->price_per_night;
-
+        // Tạo đơn hàng mới với các dữ liệu nâng cấp
         $booking = Booking::create([
             'user_id' => Auth::check() ? Auth::id() : null,
             'room_id' => $request->room_id,
@@ -96,16 +91,19 @@ class HotelController extends Controller
             'customer_email' => $request->customer_email,
             'check_in_date' => $request->check_in_date,
             'check_out_date' => $request->check_out_date,
-            'total_price' => $totalPrice,
+            'room_count' => $request->room_count, // Lưu số lượng phòng
+            'guest_count' => $request->guest_count, // Lưu số lượng người
+            'surcharge' => $request->surcharge ?? 0, // Lưu tiền phụ thu (nếu có)
+            'total_price' => $request->calculated_total, // Sử dụng tổng tiền đã được JavaScript tính toán chính xác
         ]);
 
         $room->update(['status' => 'booked']);
 
         // BẮT SỰ KIỆN: Bắn thông báo cho ADMIN khi có đơn mới
         Notification::create([
-            'user_id' => null, // Gửi cho hệ thống (Admin)
+            'user_id' => null, 
             'title' => '🛎️ Đơn đặt phòng mới',
-            'message' => 'Khách hàng ' . $request->customer_name . ' vừa đặt phòng ' . $room->room_number . ' (Mã đơn: #' . $booking->id . ').'
+            'message' => 'Khách hàng ' . $request->customer_name . ' vừa đặt ' . $request->room_count . ' phòng ' . $room->room_number . ' cho ' . $request->guest_count . ' người. (Mã đơn: #' . $booking->id . ').'
         ]);
 
         return redirect('/payment/' . $booking->id);
@@ -125,7 +123,6 @@ class HotelController extends Controller
     }
 
     // Logic Admin: Cấp quyền đổi Email cho khách
-// Logic Admin: Cấp quyền đổi Email cho khách
     public function approveEmailChange($id) {
         $user = User::findOrFail($id);
         if ($user->email_change_status === 'pending') {
@@ -147,34 +144,30 @@ class HotelController extends Controller
     public function rejectEmailChange($id) {
         $user = User::findOrFail($id);
         if ($user->email_change_status === 'pending') {
-            // Trả trạng thái về none để họ có thể xin lại nếu muốn
             $user->email_change_status = 'none'; 
             $user->save();
 
-            // BẮT SỰ KIỆN: Báo cho khách hàng biết Admin đã từ chối
             Notification::create([
                 'user_id' => $user->id,
                 'title' => '❌ Yêu cầu bị từ chối',
                 'message' => 'Quản trị viên đã từ chối yêu cầu đổi Email của bạn. Nếu có thắc mắc, vui lòng liên hệ bộ phận hỗ trợ.'
             ]);
 
-            // Dùng 'error' session để hiển thị thông báo màu đỏ bên trang Admin
             return back()->with('error', 'Đã từ chối yêu cầu đổi Email của khách hàng: ' . $user->name);
         }
         return back();
     }
     
-    // 7. Logic Admin: Duyệt đơn đặt phòng
+// 7. Logic Admin: Duyệt đơn đặt phòng
     public function confirmBooking($id) {
         $booking = Booking::findOrFail($id);
         $booking->update(['status' => 'confirmed']); 
         
-        // BẮT SỰ KIỆN: Tìm user dựa trên email đặt phòng để báo cho họ
-        $user = User::where('email', $booking->customer_email)->first();
-        if ($user) {
+        // SỬA TẠI ĐÂY: Dùng trực tiếp user_id thay vì đi tìm qua email
+        if ($booking->user_id) {
             $room = Room::find($booking->room_id);
             Notification::create([
-                'user_id' => $user->id,
+                'user_id' => $booking->user_id, // Bắn thẳng cho user sở hữu đơn này
                 'title' => '✅ Đơn đặt phòng đã duyệt',
                 'message' => 'Đơn đặt phòng #' . $booking->id . ' (Phòng ' . ($room->room_number ?? '') . ') của bạn đã được xác nhận thành công!'
             ]);
@@ -193,11 +186,10 @@ class HotelController extends Controller
             $room->update(['status' => 'available']);
         }
         
-        // BẮT SỰ KIỆN: Báo cho khách hàng biết đơn đã bị hủy
-        $user = User::where('email', $booking->customer_email)->first();
-        if ($user) {
+        // SỬA TẠI ĐÂY: Dùng trực tiếp user_id
+        if ($booking->user_id) {
             Notification::create([
-                'user_id' => $user->id,
+                'user_id' => $booking->user_id,
                 'title' => '❌ Đơn đặt phòng bị hủy',
                 'message' => 'Rất tiếc, đơn đặt phòng #' . $booking->id . ' của bạn đã bị hủy bởi Quản trị viên.'
             ]);
@@ -304,11 +296,10 @@ class HotelController extends Controller
         return back()->with('success', 'Đã thay đổi ảnh đại diện!');
     }
 
-// 3. Xử lý Yêu cầu / Xác nhận đổi Email (ĐÃ NÂNG CẤP BẢO MẬT)
+    // Xử lý Yêu cầu / Xác nhận đổi Email
     public function requestEmailChange(Request $request) {
         $user = Auth::user();
 
-        // BẮT BUỘC BƯỚC NÀY: Xác thực mật khẩu trước khi làm bất cứ hành động nào
         $request->validate([
             'password' => 'required|string'
         ], [
@@ -319,12 +310,10 @@ class HotelController extends Controller
             return back()->with('error', 'Mật khẩu xác thực không chính xác! Yêu cầu bị từ chối.');
         }
 
-        // 1. Khách bấm yêu cầu đổi Email
         if ($request->action == 'request') {
             $user->email_change_status = 'pending';
             $user->save();
 
-            // Bắn thông báo cho Admin
             Notification::create([
                 'user_id' => null, 
                 'title' => '✉️ Yêu cầu đổi Email',
@@ -334,7 +323,6 @@ class HotelController extends Controller
             return back()->with('success', 'Đã gửi yêu cầu đổi Email đến Quản trị viên. Vui lòng chờ duyệt!');
         }
 
-        // 2. Khách xác nhận đổi Email mới
         if ($request->action == 'update') {
             $request->validate(['new_email' => 'required|email|unique:users,email'], [
                 'new_email.unique' => 'Email này đã tồn tại trong hệ thống, vui lòng chọn email khác.'
@@ -342,10 +330,9 @@ class HotelController extends Controller
             
             $oldEmail = $user->email;
             $user->email = $request->new_email;
-            $user->email_change_status = 'changed'; // 'changed' để khóa vĩnh viễn quyền đổi
+            $user->email_change_status = 'changed';
             $user->save();
             
-            // Ghi nhận lịch sử cho Khách hàng
             Notification::create([
                 'user_id' => $user->id,
                 'title' => '📝 Đổi Email thành công',
@@ -358,8 +345,7 @@ class HotelController extends Controller
         return back();
     }
 
-public function myBookings() {
-        // Lấy danh sách các đơn được đặt BỞI tài khoản này (không quan tâm email liên hệ là gì)
+    public function myBookings() {
         $bookings = Booking::with('room')
             ->where('user_id', Auth::id())
             ->orderBy('created_at', 'desc')
@@ -376,40 +362,37 @@ public function myBookings() {
         return view('create_room');
     }
 
-// 13. Xử lý lưu phòng mới vào Database (Có upload ảnh)
-    public function storeRoom(Request $request) {
+public function storeRoom(Request $request) {
         $request->validate([
             'room_number' => 'required|unique:rooms,room_number',
             'room_type' => 'required',
+            'bed_type' => 'required', // Bổ sung
             'price_per_night' => 'required|numeric',
-            'image_file' => 'required|image|mimes:jpeg,png,jpg,webp|max:2048', // Ràng buộc file ảnh
+            'image_file' => 'required|image|mimes:jpeg,png,jpg,webp|max:2048', 
             'description' => 'nullable'
         ]);
 
         $imagePath = null;
-        
-        // Xử lý lưu file ảnh vào thư mục public/uploads/rooms
         if ($request->hasFile('image_file')) {
             $file = $request->file('image_file');
             $filename = time() . '_room_' . $file->getClientOriginalName();
             $file->move(public_path('uploads/rooms'), $filename);
-            
-            // Lưu lại đường dẫn để hiển thị trên web
             $imagePath = 'uploads/rooms/' . $filename; 
         }
 
         Room::create([
             'room_number' => $request->room_number,
             'room_type' => $request->room_type,
+            'bed_type' => $request->bed_type, // Bổ sung
             'price_per_night' => $request->price_per_night,
-            'image_url' => $imagePath, // Lưu đường dẫn file vào Database
+            'image_url' => $imagePath,
             'description' => $request->description,
             'status' => 'available' 
         ]);
 
         return redirect('/admin/rooms')->with('success', 'Đã thêm phòng ' . $request->room_number . ' thành công!');
     }
-    
+
     public function manageRooms() {
         $rooms = Room::orderBy('created_at', 'desc')->get();
         return view('manage_rooms', compact('rooms'));
@@ -432,22 +415,34 @@ public function myBookings() {
         return view('edit_room', compact('room'));
     }
 
-    public function updateRoom(Request $request, $id) {
+public function updateRoom(Request $request, $id) {
         $room = Room::findOrFail($id);
-        
         $request->validate([
             'room_number' => 'required|unique:rooms,room_number,' . $id,
             'room_type' => 'required',
+            'bed_type' => 'required', // Bổ sung
             'price_per_night' => 'required|numeric',
-            'image_url' => 'nullable|url',
+            'image_file' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'image_url' => 'nullable|string',
             'description' => 'nullable'
         ]);
+
+        $imagePath = $room->image_url;
+        if ($request->hasFile('image_file')) {
+            $file = $request->file('image_file');
+            $filename = time() . '_room_update_' . $file->getClientOriginalName();
+            $file->move(public_path('uploads/rooms'), $filename);
+            $imagePath = 'uploads/rooms/' . $filename; 
+        } elseif ($request->filled('image_url')) {
+            $imagePath = $request->image_url;
+        }
 
         $room->update([
             'room_number' => $request->room_number,
             'room_type' => $request->room_type,
+            'bed_type' => $request->bed_type, // Bổ sung
             'price_per_night' => $request->price_per_night,
-            'image_url' => $request->image_url,
+            'image_url' => $imagePath,
             'description' => $request->description
         ]);
 
@@ -462,7 +457,7 @@ public function myBookings() {
         $booking = Booking::findOrFail($id);
         $deposit = $booking->total_price * 0.3;
 
-        $bankId = 'VCB'; 
+        $bankId = 'MB'; 
         $accountNo = '9704229206534913427'; 
         $accountName = 'VI CONG NGUYEN'; 
 
@@ -492,9 +487,10 @@ public function myBookings() {
         return response()->json(['success' => false, 'message' => 'Không tìm thấy đơn hàng hoặc đã được duyệt.']);
     }
 
-    public function searchRooms(Request $request) {
+public function searchRooms(Request $request) {
         $checkIn = $request->input('check_in');
         $checkOut = $request->input('check_out');
+        $bedType = $request->input('bed_type'); // Nhận giá trị số giường
 
         if (!$checkIn || !$checkOut) {
             return redirect('/rooms');
@@ -506,45 +502,61 @@ public function myBookings() {
             ->pluck('room_id') 
             ->toArray();
 
-        $rooms = Room::whereNotIn('id', $bookedRoomIds)->get();
+        // Query cơ bản (loại bỏ phòng đã bị đặt)
+        $query = Room::whereNotIn('id', $bookedRoomIds);
 
-        $message = "Hiển thị các phòng trống từ " . \Carbon\Carbon::parse($checkIn)->format('d/m/Y') . " đến " . \Carbon\Carbon::parse($checkOut)->format('d/m/Y');
+        // Lọc thêm theo Loại giường nếu khách có chọn
+        if (!empty($bedType)) {
+            $query->where('bed_type', $bedType);
+        }
+
+        $rooms = $query->get();
+        $message = "Kết quả tìm kiếm từ " . \Carbon\Carbon::parse($checkIn)->format('d/m/Y') . " đến " . \Carbon\Carbon::parse($checkOut)->format('d/m/Y');
+        if(!empty($bedType)) $message .= " (Cấu hình: $bedType)";
         
         return view('rooms', compact('rooms'))->with('searchMessage', $message);
     }
+        
     // -----------------------------------------------------
     // API: Đánh dấu tất cả thông báo là đã đọc (AJAX)
     // -----------------------------------------------------
     public function markAllNotificationsAsRead() {
-        // Kiểm tra xem là Admin hay Khách để lấy đúng luồng thông báo
         $query = Auth::user()->role === 'admin' 
                  ? Notification::whereNull('user_id') 
                  : Notification::where('user_id', Auth::id());
         
-        // Update toàn bộ những cái chưa đọc (false) thành đã đọc (true)
         $query->where('is_read', false)->update(['is_read' => true]);
 
         return response()->json(['success' => true]);
     }
+
     // -----------------------------------------------------
     // LOGIC HOÀN TIỀN DÀNH CHO KHÁCH HÀNG & ADMIN
     // -----------------------------------------------------
     
-    // Khách hàng gửi yêu cầu hoàn tiền
     public function requestRefund(Request $request, $id) {
         $booking = Booking::findOrFail($id);
+        $user = Auth::user();
         
-        // Bảo mật: Tránh trường hợp khách này hack gửi yêu cầu đơn của khách khác
-        if ($booking->user_id !== Auth::id()) {
+        if ($booking->user_id !== $user->id) {
             return back()->with('error', 'Hành động không hợp lệ!');
         }
 
         $request->validate([
+            'password' => 'required|string',
             'bank_info' => 'required|string',
+            'refund_reason' => 'required|string',
             'refund_qr' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048'
+        ], [
+            'password.required' => 'Vui lòng nhập mật khẩu tài khoản để xác nhận.',
+            'refund_reason.required' => 'Vui lòng điền lý do xin hoàn tiền.'
         ]);
 
-        $filename = $booking->refund_qr; // Giữ lại ảnh cũ nếu có
+        if (!Hash::check($request->password, $user->password)) {
+            return back()->with('error', 'Mật khẩu xác thực không chính xác! Yêu cầu hoàn tiền bị từ chối.');
+        }
+
+        $filename = $booking->refund_qr;
         if ($request->hasFile('refund_qr')) {
             $file = $request->file('refund_qr');
             $filename = time() . '_refund_' . $file->getClientOriginalName();
@@ -552,35 +564,31 @@ public function myBookings() {
             $filename = 'uploads/refunds/' . $filename;
         }
 
-        // Chuyển trạng thái đơn thành 'refund_pending' (Chờ hoàn tiền)
         $booking->update([
             'status' => 'refund_pending',
             'bank_info' => $request->bank_info,
+            'refund_reason' => $request->refund_reason,
             'refund_qr' => $filename
         ]);
 
-        // Bắn thông báo Real-time báo cho ADMIN
         Notification::create([
-            'user_id' => null, // Admin nhận
+            'user_id' => null, 
             'title' => '💸 Yêu cầu hoàn tiền mới',
-            'message' => 'Khách hàng ' . $booking->customer_name . ' vừa gửi yêu cầu hoàn tiền cho đơn #' . $booking->id
+            'message' => 'Khách ' . $booking->customer_name . ' vừa xin hoàn tiền đơn #' . $booking->id . '. Lý do: ' . $request->refund_reason
         ]);
 
-        return back()->with('success', 'Đã gửi yêu cầu hoàn tiền thành công! Vui lòng chờ hệ thống xử lý.');
+        return back()->with('success', 'Đã xác thực mật khẩu thành công! Yêu cầu hoàn tiền đã được gửi tới Admin.');
     }
 
-    // Admin xác nhận: ĐÃ HOÀN TIỀN
     public function confirmRefund($id) {
         $booking = Booking::findOrFail($id);
-        $booking->update(['status' => 'cancelled']); // Hoặc bạn có thể đặt trạng thái là 'refunded' tùy ý, ở đây chuyển về cancelled để nhả phòng
+        $booking->update(['status' => 'cancelled']); 
 
-        // Tự động giải phóng phòng sang trạng thái trống (available)
         $room = Room::find($booking->room_id);
         if ($room) {
             $room->update(['status' => 'available']);
         }
 
-        // Bắn thông báo gửi về cho KHÁCH HÀNG
         Notification::create([
             'user_id' => $booking->user_id,
             'title' => '💰 Hoàn tiền thành công',
@@ -590,13 +598,10 @@ public function myBookings() {
         return back()->with('success', 'Đã xử lý: Hoàn tiền thành công cho đơn #' . $id);
     }
 
-    // Admin xác nhận: TỪ CHỐI HOÀN TIỀN
     public function denyRefund($id) {
         $booking = Booking::findOrFail($id);
-        // Trả trạng thái về lại 'confirmed' (Đã duyệt phòng cũ)
         $booking->update(['status' => 'confirmed']);
 
-        // Bắn thông báo gửi về cho KHÁCH HÀNG
         Notification::create([
             'user_id' => $booking->user_id,
             'title' => '❌ Yêu cầu hoàn tiền bị từ chối',
@@ -604,5 +609,40 @@ public function myBookings() {
         ]);
 
         return back()->with('error', 'Đã từ chối hoàn tiền cho đơn #' . $id);
+    }
+    
+// API: Quét thông báo Real-time cho Khách hàng
+    public function checkCustomerNoti() {
+        if (!Auth::check()) {
+            return response()->json(['count' => 0]);
+        }
+
+        $query = Notification::where('user_id', Auth::id());
+        
+        $unreadCount = (clone $query)->where('is_read', false)->count();
+        $notifications = $query->orderBy('created_at', 'desc')->take(5)->get();
+
+        // Trả về cả số lượng VÀ nội dung thông báo để Javascript tự vẽ ra màn hình
+        return response()->json([
+            'count' => $unreadCount,
+            'notifications' => $notifications->map(function($noti) {
+                return [
+                    'title' => $noti->title,
+                    'message' => $noti->message,
+                    'time' => $noti->created_at->diffForHumans(),
+                    'is_read' => $noti->is_read
+                ];
+            })
+        ]);
+        }
+public function checkNewData() {
+        if (!Auth::check() || Auth::user()->role !== 'admin') {
+            return response()->json(['count' => 0]);
+        }
+
+        // Đếm tổng số thông báo chưa đọc của Admin (user_id = null)
+        $unreadCount = Notification::whereNull('user_id')->where('is_read', false)->count();
+        
+        return response()->json(['count' => $unreadCount]);
     }
 }
