@@ -39,8 +39,17 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [HotelController::class, 'profile']);
     Route::post('/profile/update', [HotelController::class, 'updateProfile']);
     
+    // THÊM 2 DÒNG NÀY ĐỂ XỬ LÝ ẢNH VÀ EMAIL (KHÔNG BỊ 404 NỮA)
+    Route::post('/profile/avatar', [HotelController::class, 'updateAvatar']);
+    Route::post('/profile/email', [HotelController::class, 'requestEmailChange']);
+    
     // Khách hàng vào xem lịch sử các đơn họ đã đặt
     Route::get('/my-bookings', [HotelController::class, 'myBookings']); 
+    Route::post('/my-bookings/{id}/refund', [HotelController::class, 'requestRefund']);
+    // API Đánh dấu đã đọc thông báo
+    Route::post('/notifications/mark-all-read', [HotelController::class, 'markAllNotificationsAsRead']);
+    // API Quét thông báo mới cho Khách hàng (Real-time)
+    Route::get('/notifications/check-customer', [HotelController::class, 'checkCustomerNoti']);
 });
 
 // ==============================================================
@@ -62,5 +71,17 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/admin/rooms/{id}/edit', [HotelController::class, 'editRoom']);
     Route::post('/admin/rooms/{id}/update', [HotelController::class, 'updateRoom']);
     Route::post('/admin/rooms/{id}/delete', [HotelController::class, 'deleteRoom']);
+    Route::post('/admin/booking/{id}/refund-confirm', [HotelController::class, 'confirmRefund']);
+    Route::post('/admin/booking/{id}/refund-deny', [HotelController::class, 'denyRefund']);
+
+    Route::get('/admin/check-new-data', function() {
+        $pendingEmails = App\Models\User::where('email_change_status', 'pending')->count();
+        $pendingBookings = App\Models\Booking::where('status', 'pending')->count();
+        return response()->json(['emails' => $pendingEmails, 'bookings' => $pendingBookings]);
+    });
     
-});
+    // Duyệt yêu cầu đổi Email
+// Duyệt / Từ chối yêu cầu đổi Email
+    Route::post('/admin/approve-email/{id}', [HotelController::class, 'approveEmailChange']);
+    Route::post('/admin/reject-email/{id}', [HotelController::class, 'rejectEmailChange']);
+    });

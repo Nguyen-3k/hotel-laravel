@@ -13,12 +13,23 @@
     <main class="container mx-auto py-12 px-4 max-w-4xl">
         <div class="bg-white rounded-2xl shadow-xl overflow-hidden grid grid-cols-1 md:grid-cols-2 gap-8 p-6 md:p-8">
             <div>
-                <img src="{{ $room->image_url ?? 'https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=500' }}" alt="{{ $room->room_number }}" class="w-full rounded-xl object-cover h-80 shadow-md">
+                @if(Str::startsWith($room->image_url, 'http'))
+                    <img src="{{ $room->image_url }}" alt="Phòng {{ $room->room_number }}" class="w-full h-full object-cover rounded-xl">
+                @else
+                    <img src="{{ asset($room->image_url) }}" alt="Phòng {{ $room->room_number }}" class="w-full h-full object-cover rounded-xl">
+                @endif            
             </div>
             <div class="flex flex-col justify-between">
                 <div>
                     <h1 class="text-3xl font-black text-gray-900 mb-2">Phòng Số: {{ $room->room_number }}</h1>
-                    <span class="inline-block bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full mb-6">Hạng phòng: {{ $room->room_type }}</span>
+                    <div class="flex gap-2 mb-6">
+    <span class="inline-block bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1.5 rounded-full border border-amber-200">
+        Hạng: {{ $room->room_type }}
+    </span>
+    <span class="inline-block bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1.5 rounded-full border border-blue-200">
+        👤 Tối đa: {{ str_contains(mb_strtolower($room->room_type), 'đơn') ? '2' : '3' }} người
+    </span>
+</div>
                     
                     <h3 class="font-bold text-gray-700 mb-2">📄 Mô tả phòng:</h3>
                     <p class="text-gray-600 text-sm leading-relaxed mb-6">{{ $room->description ?? 'Phòng đầy đủ tiện ích cơ bản, có điều hòa nhiệt độ, nóng lạnh, giường đệm cao cấp êm ái giúp bạn có giấc ngủ sâu.' }}</p>

@@ -108,22 +108,57 @@
                                     <span class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200">Chờ xác nhận</span>
                                 @elseif($booking->status == 'confirmed')
                                     <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold border border-green-200">Đã duyệt</span>
+                                @elseif($booking->status == 'refund_pending')
+                                    <span class="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold border border-amber-200">Chờ hoàn tiền</span>
                                 @else
                                     <span class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-bold border border-red-200">Đã hủy</span>
                                 @endif
                             </td>
 
-                            <td class="p-4 text-center flex justify-center gap-2">
+                            <td class="p-4 text-center flex flex-col items-center justify-center gap-2">
                                 @if($booking->status == 'pending')
-                                    <form action="/admin/booking/{{ $booking->id }}/confirm" method="POST">
-                                        @csrf
-                                        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow-sm">Duyệt</button>
-                                    </form>
-                                    
-                                    <form action="/admin/booking/{{ $booking->id }}/cancel" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn hủy đơn này và nhả phòng không?');">
-                                        @csrf
-                                        <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow-sm">Hủy đơn</button>
-                                    </form>
+                                    <div class="flex gap-2">
+                                        <form action="/admin/booking/{{ $booking->id }}/confirm" method="POST">
+                                            @csrf
+                                            <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow-sm">Duyệt</button>
+                                        </form>
+                                        <form action="/admin/booking/{{ $booking->id }}/cancel" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn hủy đơn này không?');">
+                                            @csrf
+                                            <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow-sm">Hủy đơn</button>
+                                        </form>
+                                    </div>
+
+                                @elseif($booking->status == 'refund_pending')
+                                    <div class="text-left bg-amber-50 p-3 rounded-lg border border-amber-200 w-full max-w-xs mb-1">
+                                        <p class="text-xs font-bold text-amber-800">📌 Lý do hoàn trả:</p>
+                                        <p class="text-xs text-red-700 italic font-medium mb-2">"{{ $booking->refund_reason ?? 'Không ghi rõ lý do' }}"</p>
+
+                                        <p class="text-xs font-bold text-amber-800 border-t pt-1">🏦 Tài khoản nhận tiền:</p>
+                                        <p class="text-xs text-gray-700 font-mono mt-0.5">{{ $booking->bank_info }}</p>
+                                        @if($booking->refund_qr)
+                                            <a href="{{ asset($booking->refund_qr) }}" target="_blank" class="text-[11px] text-blue-600 font-bold hover:underline block mt-1">🖼️ Xem ảnh QR nhận tiền</a>
+                                        @endif
+                                    </div>
+                                    <div class="flex flex-col gap-1 w-full items-center">
+                                        <button onclick="showRefundActions({{ $booking->id }})" id="processBtn-{{ $booking->id }}" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow-sm w-full max-w-[120px]">
+                                            ⚙️ Xử lý hoàn trả
+                                        </button>
+                                        
+                                        <div id="refundActions-{{ $booking->id }}" class="hidden flex gap-1.5 mt-1">
+                                            <form action="/admin/booking/{{ $booking->id }}/refund-confirm" method="POST" onsubmit="return confirm('Xác nhận bạn ĐÃ chuyển khoản hoàn tiền cho khách?');">
+                                                @csrf
+                                                <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-[11px] font-bold transition shadow-sm">
+                                                    Đã hoàn tiền
+                                                </button>
+                                            </form>
+                                            <form action="/admin/booking/{{ $booking->id }}/refund-deny" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn TỪ CHỐI hoàn tiền?');">
+                                                @csrf
+                                                <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-[11px] font-bold transition shadow-sm">
+                                                    Từ chối
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
                                 @else
                                     <span class="text-gray-400 text-xs italic">Đã xử lý xong</span>
                                 @endif
@@ -137,6 +172,107 @@
                 </tbody>
             </table>
         </div>
+        
+        <h2 class="text-2xl font-black text-gray-800 mb-6 mt-12">✉️ Yêu Cầu Đổi Email</h2>
+        <div class="bg-white rounded-xl shadow-md overflow-hidden mb-12">
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-gray-800 text-white text-sm uppercase">
+                    <tr>
+                        <th class="p-4 border-b">Khách Hàng</th>
+                        <th class="p-4 border-b">Email Hiện Tại</th>
+                        <th class="p-4 border-b text-center">Trạng Thái</th>
+                        <th class="p-4 border-b text-center">Hành Động</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm">
+                    @forelse($pendingEmails as $user)
+                        <tr class="hover:bg-gray-50 border-b">
+                            <td class="p-4 font-bold text-gray-700">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                                        {{ substr($user->name, 0, 1) }}
+                                    </div>
+                                    {{ $user->name }}
+                                </div>
+                            </td>
+                            <td class="p-4 text-gray-500">{{ $user->email }}</td>
+                            <td class="p-4 text-center">
+                                <span class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200">Đang chờ duyệt</span>
+                            </td>
+                            <td class="p-4 text-center flex justify-center gap-2">
+                                <form action="/admin/approve-email/{{ $user->id }}" method="POST">
+                                    @csrf
+                                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm">
+                                        ✅ Cấp quyền
+                                    </button>
+                                </form>
+                                
+                                <form action="/admin/reject-email/{{ $user->id }}" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn từ chối yêu cầu này không?');">
+                                    @csrf
+                                    <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm">
+                                        ❌ Từ chối
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="4" class="p-8 text-center text-gray-500">Chưa có yêu cầu đổi email nào.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
     </main>
+
+    <script>
+        // Hàm hiển thị 2 nút hoàn tiền
+        function showRefundActions(id) {
+            const actionDiv = document.getElementById('refundActions-' + id);
+            const processBtn = document.getElementById('processBtn-' + id);
+            if(actionDiv) {
+                actionDiv.classList.toggle('hidden');
+                
+                if(!actionDiv.classList.contains('hidden')) {
+                    processBtn.innerText = '❌ Đóng lựa chọn';
+                    processBtn.classList.replace('bg-amber-500', 'bg-gray-500');
+                    processBtn.classList.replace('hover:bg-amber-600', 'hover:bg-gray-600');
+                } else {
+                    processBtn.innerText = '⚙️ Xử lý hoàn trả';
+                    processBtn.classList.replace('bg-gray-500', 'bg-amber-500');
+                    processBtn.classList.replace('hover:bg-gray-600', 'hover:bg-amber-600');
+                }
+            }
+        }
+
+        // ===============================================
+        // RADAR QUÉT THÔNG BÁO TỰ ĐỘNG RELOAD TRANG ADMIN
+        // ===============================================
+            document.addEventListener('DOMContentLoaded', function() {
+            // Lấy số lượng thông báo chưa đọc ban đầu
+            let currentAdminUnread = {{ \App\Models\Notification::whereNull('user_id')->where('is_read', false)->count() }};
+            
+            setInterval(function() {
+                fetch('/admin/check-new-data')
+                    .then(response => response.json())
+                    .then(data => {
+                        // Nếu số lượng trên DB lớn hơn số hiện tại -> Có biến mới!
+                        if(data.count > currentAdminUnread) {
+                            
+                            // Phát âm thanh
+                            let audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+                            audio.play().catch(e => console.log("Trình duyệt chặn âm thanh"));
+                            
+                            // Cập nhật lại số mốc
+                            currentAdminUnread = data.count;
+                            
+                            // Reload trang để cập nhật Bảng Đơn hàng và Bảng Hoàn tiền
+                            window.location.reload();
+                        }
+                    })
+                    .catch(e => console.error("Lỗi đồng bộ Admin:", e));
+            }, 3000); 
+        });
+            </script>
 </body>
 </html>
