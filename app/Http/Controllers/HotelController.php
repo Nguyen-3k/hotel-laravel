@@ -10,6 +10,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash; 
 use Carbon\Carbon;
 use App\Models\Notification;
+use App\Models\RoomImage;
+use App\Models\Review;
+use App\Models\CouponUsage;
 
 class HotelController extends Controller
 {
@@ -52,7 +55,7 @@ class HotelController extends Controller
         return view('booking', compact('rooms', 'selectedRoomId', 'bookedDates'));
     }
 
-    // 5. Logic xử lý khi khách ấn nút GỬI FORM ĐẶT PHÒNG (ĐÃ CẬP NHẬT LẤY SỐ NGƯỜI, SỐ PHÒNG, PHỤ THU)
+    // 5. Logic xử lý khi khách ấn nút GỬI FORM ĐẶT PHÒNG
     public function checkout(Request $request) {
         $request->validate([
             'room_id' => 'required|exists:rooms,id',
@@ -91,11 +94,21 @@ class HotelController extends Controller
             'customer_email' => $request->customer_email,
             'check_in_date' => $request->check_in_date,
             'check_out_date' => $request->check_out_date,
-            'room_count' => $request->room_count, // Lưu số lượng phòng
-            'guest_count' => $request->guest_count, // Lưu số lượng người
-            'surcharge' => $request->surcharge ?? 0, // Lưu tiền phụ thu (nếu có)
-            'total_price' => $request->calculated_total, // Sử dụng tổng tiền đã được JavaScript tính toán chính xác
+            'room_count' => $request->room_count, 
+            'guest_count' => $request->guest_count, 
+            'surcharge' => $request->surcharge ?? 0, 
+            'total_price' => $request->calculated_total, 
         ]);
+
+        // Nếu khách có dùng mã giảm giá hợp lệ, lưu vào bảng coupon_usages để chặn dùng lại
+        if ($request->filled('coupon_code') && $request->coupon_code === 'TAHOTELBANMOI') {
+            CouponUsage::create([
+                'user_id' => Auth::check() ? Auth::id() : null,
+                'email' => $request->customer_email,
+                'coupon_code' => 'TAHOTELBANMOI',
+                'booking_id' => $booking->id
+            ]);
+        }
 
         $room->update(['status' => 'booked']);
 
@@ -158,16 +171,15 @@ class HotelController extends Controller
         return back();
     }
     
-// 7. Logic Admin: Duyệt đơn đặt phòng
+    // 7. Logic Admin: Duyệt đơn đặt phòng
     public function confirmBooking($id) {
         $booking = Booking::findOrFail($id);
         $booking->update(['status' => 'confirmed']); 
         
-        // SỬA TẠI ĐÂY: Dùng trực tiếp user_id thay vì đi tìm qua email
         if ($booking->user_id) {
             $room = Room::find($booking->room_id);
             Notification::create([
-                'user_id' => $booking->user_id, // Bắn thẳng cho user sở hữu đơn này
+                'user_id' => $booking->user_id, 
                 'title' => '✅ Đơn đặt phòng đã duyệt',
                 'message' => 'Đơn đặt phòng #' . $booking->id . ' (Phòng ' . ($room->room_number ?? '') . ') của bạn đã được xác nhận thành công!'
             ]);
@@ -186,7 +198,6 @@ class HotelController extends Controller
             $room->update(['status' => 'available']);
         }
         
-        // SỬA TẠI ĐÂY: Dùng trực tiếp user_id
         if ($booking->user_id) {
             Notification::create([
                 'user_id' => $booking->user_id,
@@ -362,11 +373,11 @@ class HotelController extends Controller
         return view('create_room');
     }
 
-public function storeRoom(Request $request) {
+    public function storeRoom(Request $request) {
         $request->validate([
             'room_number' => 'required|unique:rooms,room_number',
             'room_type' => 'required',
-            'bed_type' => 'required', // Bổ sung
+            'bed_type' => 'required', 
             'price_per_night' => 'required|numeric',
             'image_file' => 'required|image|mimes:jpeg,png,jpg,webp|max:2048', 
             'description' => 'nullable'
@@ -383,7 +394,7 @@ public function storeRoom(Request $request) {
         Room::create([
             'room_number' => $request->room_number,
             'room_type' => $request->room_type,
-            'bed_type' => $request->bed_type, // Bổ sung
+            'bed_type' => $request->bed_type, 
             'price_per_night' => $request->price_per_night,
             'image_url' => $imagePath,
             'description' => $request->description,
@@ -415,21 +426,26 @@ public function storeRoom(Request $request) {
         return view('edit_room', compact('room'));
     }
 
-public function updateRoom(Request $request, $id) {
+    // -------------------------------------------------------------
+    // 👉 ĐÃ SỬA: Hàm updateRoom để nhận file theo biến "image_upload"
+    // -------------------------------------------------------------
+    public function updateRoom(Request $request, $id) {
         $room = Room::findOrFail($id);
         $request->validate([
             'room_number' => 'required|unique:rooms,room_number,' . $id,
             'room_type' => 'required',
-            'bed_type' => 'required', // Bổ sung
+            'bed_type' => 'required',
             'price_per_night' => 'required|numeric',
-            'image_file' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'image_upload' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048', // <-- Chỉnh sửa từ image_file sang image_upload
             'image_url' => 'nullable|string',
             'description' => 'nullable'
         ]);
 
         $imagePath = $room->image_url;
-        if ($request->hasFile('image_file')) {
-            $file = $request->file('image_file');
+        
+        // <-- Chỉnh sửa: Lấy file từ thẻ có name="image_upload"
+        if ($request->hasFile('image_upload')) {
+            $file = $request->file('image_upload');
             $filename = time() . '_room_update_' . $file->getClientOriginalName();
             $file->move(public_path('uploads/rooms'), $filename);
             $imagePath = 'uploads/rooms/' . $filename; 
@@ -440,11 +456,23 @@ public function updateRoom(Request $request, $id) {
         $room->update([
             'room_number' => $request->room_number,
             'room_type' => $request->room_type,
-            'bed_type' => $request->bed_type, // Bổ sung
+            'bed_type' => $request->bed_type,
             'price_per_night' => $request->price_per_night,
             'image_url' => $imagePath,
             'description' => $request->description
         ]);
+
+        // LOGIC LƯU THÊM NHIỀU ẢNH PHỤ
+        if ($request->hasFile('gallery_images')) {
+            foreach ($request->file('gallery_images') as $file) {
+                $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                $file->move(public_path('uploads/rooms'), $filename);
+                RoomImage::create([
+                    'room_id' => $room->id,
+                    'image_url' => 'uploads/rooms/' . $filename
+                ]);
+            }
+        }
 
         return redirect('/admin/rooms')->with('success', 'Đã cập nhật thông tin phòng P.' . $room->room_number . ' thành công!');
     }
@@ -487,10 +515,10 @@ public function updateRoom(Request $request, $id) {
         return response()->json(['success' => false, 'message' => 'Không tìm thấy đơn hàng hoặc đã được duyệt.']);
     }
 
-public function searchRooms(Request $request) {
+    public function searchRooms(Request $request) {
         $checkIn = $request->input('check_in');
         $checkOut = $request->input('check_out');
-        $bedType = $request->input('bed_type'); // Nhận giá trị số giường
+        $bedType = $request->input('bed_type'); 
 
         if (!$checkIn || !$checkOut) {
             return redirect('/rooms');
@@ -502,10 +530,8 @@ public function searchRooms(Request $request) {
             ->pluck('room_id') 
             ->toArray();
 
-        // Query cơ bản (loại bỏ phòng đã bị đặt)
         $query = Room::whereNotIn('id', $bookedRoomIds);
 
-        // Lọc thêm theo Loại giường nếu khách có chọn
         if (!empty($bedType)) {
             $query->where('bed_type', $bedType);
         }
@@ -611,7 +637,7 @@ public function searchRooms(Request $request) {
         return back()->with('error', 'Đã từ chối hoàn tiền cho đơn #' . $id);
     }
     
-// API: Quét thông báo Real-time cho Khách hàng
+    // API: Quét thông báo Real-time cho Khách hàng
     public function checkCustomerNoti() {
         if (!Auth::check()) {
             return response()->json(['count' => 0]);
@@ -622,7 +648,6 @@ public function searchRooms(Request $request) {
         $unreadCount = (clone $query)->where('is_read', false)->count();
         $notifications = $query->orderBy('created_at', 'desc')->take(5)->get();
 
-        // Trả về cả số lượng VÀ nội dung thông báo để Javascript tự vẽ ra màn hình
         return response()->json([
             'count' => $unreadCount,
             'notifications' => $notifications->map(function($noti) {
@@ -634,15 +659,122 @@ public function searchRooms(Request $request) {
                 ];
             })
         ]);
-        }
-public function checkNewData() {
+    }
+
+    public function checkNewData() {
         if (!Auth::check() || Auth::user()->role !== 'admin') {
             return response()->json(['count' => 0]);
         }
 
-        // Đếm tổng số thông báo chưa đọc của Admin (user_id = null)
         $unreadCount = Notification::whereNull('user_id')->where('is_read', false)->count();
         
         return response()->json(['count' => $unreadCount]);
+    }
+    // API: Kiểm tra mã giảm giá
+    public function checkCoupon(Request $request) {
+        $code = strtoupper($request->input('coupon_code'));
+        $email = $request->input('email');
+        $userId = Auth::check() ? Auth::id() : null;
+
+        if ($code !== 'TAHOTELBANMOI') {
+            return response()->json(['success' => false, 'message' => 'Mã giảm giá không tồn tại hoặc đã hết hạn.']);
+        }
+
+        if (!$email && !$userId) {
+            return response()->json(['success' => false, 'message' => 'Vui lòng nhập Email của bạn trước khi áp dụng mã!']);
+        }
+
+        // Kiểm tra xem user này hoặc email này đã dùng mã chưa
+        $query = CouponUsage::where('coupon_code', $code);
+        if ($userId) {
+            $query->where(function($q) use ($userId, $email) {
+                $q->where('user_id', $userId)->orWhere('email', $email);
+            });
+        } else {
+            $query->where('email', $email);
+        }
+
+        if ($query->exists()) {
+            return response()->json(['success' => false, 'message' => 'Rất tiếc! Mỗi tài khoản hoặc Email chỉ được sử dụng mã này 1 lần.']);
+        }
+
+        return response()->json([
+            'success' => true, 
+            'message' => 'Áp dụng mã thành công! Bạn được giảm 10% tổng giá trị phòng.',
+            'discount_percent' => 10
+        ]);
+    }
+
+    // Logic: Gửi đánh giá phòng sau khi ở
+    public function submitReview(Request $request) {
+        $request->validate([
+            'room_id' => 'required|exists:rooms,id',
+            'booking_id' => 'required|exists:bookings,id',
+            'rating' => 'required|integer|min:1|max:5',
+            'comment' => 'nullable|string|max:1000'
+        ]);
+
+        Review::create([
+            'user_id' => Auth::id(),
+            'room_id' => $request->room_id,
+            'booking_id' => $request->booking_id,
+            'rating' => $request->rating,
+            'comment' => $request->comment
+        ]);
+
+        return back()->with('success', 'Cảm ơn bạn đã để lại đánh giá cho phòng này!');
+    }
+
+    // Logic Admin: Xóa ảnh phụ
+    public function deleteRoomImage($id) {
+        $image = RoomImage::findOrFail($id);
+        // Xóa file vật lý trong thư mục (nếu tồn tại)
+        if(file_exists(public_path($image->image_url))) {
+            @unlink(public_path($image->image_url));
+        }
+        $image->delete();
+        
+        return back()->with('success', 'Đã xóa ảnh thành công!');
+    }
+    // =========================================================
+    // LỄ TÂN: CHECK-IN & CHECK-OUT
+    // =========================================================
+
+    public function checkInBooking(Request $request, $id) {
+        $booking = Booking::findOrFail($id);
+        
+        $request->validate([
+            'id_card_image' => 'required|image|mimes:jpeg,png,jpg,webp|max:2048'
+        ]);
+
+        $imagePath = null;
+        if ($request->hasFile('id_card_image')) {
+            $file = $request->file('id_card_image');
+            $filename = time() . '_cccd_' . $booking->id . '_' . $file->getClientOriginalName();
+            $file->move(public_path('uploads/customers'), $filename);
+            $imagePath = 'uploads/customers/' . $filename;
+        }
+
+        $booking->update([
+            'status' => 'checked_in',
+            'id_card_image' => $imagePath
+        ]);
+
+        return redirect('/admin')->with('success', 'Đã Check-in thành công cho phòng P.' . ($booking->room->room_number ?? ''));
+    }
+
+    public function checkOutBooking($id) {
+        $booking = Booking::findOrFail($id);
+        
+        // Chuyển trạng thái đơn thành hoàn tất
+        $booking->update(['status' => 'completed']);
+        
+        // Trả lại phòng trống cho hệ thống
+        $room = Room::find($booking->room_id);
+        if ($room) {
+            $room->update(['status' => 'available']);
+        }
+
+        return redirect('/admin')->with('success', 'Đã Check-out & Thu tiền thành công cho hóa đơn #' . $id);
     }
 }

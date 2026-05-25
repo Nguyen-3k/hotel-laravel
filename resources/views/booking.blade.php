@@ -6,6 +6,7 @@
     <title>Đặt Phòng Khách Sạn - Thiên Ân Hotel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 <body class="bg-gray-50 text-gray-800 flex flex-col min-h-screen">
 
@@ -39,6 +40,7 @@
                     @csrf
                     <input type="hidden" id="hidden_surcharge" name="surcharge" value="0">
                     <input type="hidden" id="hidden_total" name="calculated_total" value="0">
+                    <input type="hidden" id="hidden_coupon_code" name="coupon_code" value="">
 
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">Chọn phòng bạn muốn đặt:</label>
@@ -64,8 +66,8 @@
                     </div>
 
                     <div class="mt-4">
-                        <label class="block text-sm font-bold text-gray-700 mb-1">Địa chỉ Gmail (Không bắt buộc):</label>
-                        <input type="email" name="customer_email" placeholder="Nhập gmail" class="w-full border border-gray-300 rounded-xl p-3 bg-gray-50 focus:outline-emerald-700">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Địa chỉ Gmail (Bắt buộc nếu muốn dùng mã giảm giá):</label>
+                        <input type="email" name="customer_email" id="customer_email" placeholder="Nhập gmail" class="w-full border border-gray-300 rounded-xl p-3 bg-gray-50 focus:outline-emerald-700">
                         <p class="text-xs text-gray-400 mt-1 italic">* Dùng để nhận hóa đơn điện tử (Chỉ chấp nhận đuôi @gmail.com)</p>
                     </div>
 
@@ -104,6 +106,15 @@
                         </div>
                     </div>
 
+                    <div class="mt-4 p-4 border border-amber-200 bg-amber-50 rounded-xl">
+                        <label class="block text-sm font-bold text-amber-800 mb-2">🎁 Mã giảm giá (Nếu có):</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="coupon_input" placeholder="Nhập mã (VD: TAHOTELBANMOI)" class="w-full border border-amber-300 rounded-lg p-2 uppercase focus:outline-amber-600 bg-white">
+                            <button type="button" onclick="applyCoupon()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 rounded-lg font-bold transition shadow whitespace-nowrap">ÁP DỤNG</button>
+                        </div>
+                        <p id="coupon_msg" class="text-xs font-bold mt-2 text-gray-500"></p>
+                    </div>
+
                     <button type="button" onclick="openConfirmModal()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-3.5 px-6 rounded-xl transition mt-6 shadow-md shadow-emerald-700/20 text-lg">
                         🚀 ĐẾN BƯỚC THANH TOÁN
                     </button>
@@ -135,10 +146,17 @@
                     <span class="text-gray-500 font-medium">Thời gian lưu trú:</span>
                     <span class="font-bold text-gray-800"><span id="modal_days"></span> đêm</span>
                 </div>
-                <div class="flex justify-between mb-3 text-red-600 font-bold hidden bg-red-50 p-2 rounded border border-red-100" id="surcharge_box">
-                    <span>Phụ thu vượt người:</span>
+                
+                <div class="flex justify-between mb-2 text-red-600 font-bold hidden bg-red-50 p-2 rounded border border-red-100" id="surcharge_box">
+                    <span>Phụ thu vượt người (20%/ngày):</span>
                     <span id="modal_surcharge">0đ</span>
                 </div>
+                
+                <div class="flex justify-between mb-3 text-green-600 font-bold hidden bg-green-50 p-2 rounded border border-green-100" id="discount_box">
+                    <span>Mã giảm giá (10%):</span>
+                    <span id="modal_discount">-0đ</span>
+                </div>
+
                 <div class="flex justify-between pt-3 border-t-2 border-gray-200 border-dashed mt-2 items-center">
                     <span class="font-bold text-gray-800 uppercase tracking-wider">Tổng cộng:</span>
                     <span class="font-black text-2xl text-red-600" id="modal_total"></span>
@@ -165,7 +183,48 @@
         // ==========================================
         let currentPrice = 0;
         let isSingle = true;
-        const surchargeRate = 150000; // Phụ thu 150k
+        let discountPercent = 0; // Lưu % giảm giá
+
+        // HÀM MỚI: KIỂM TRA MÃ GIẢM GIÁ QUA API
+        async function applyCoupon() {
+            const codeInput = document.getElementById('coupon_input').value.trim().toUpperCase();
+            const emailInput = document.getElementById('customer_email').value.trim();
+            const msgBox = document.getElementById('coupon_msg');
+            
+            if(!codeInput) {
+                msgBox.innerText = "⚠️ Vui lòng nhập mã!";
+                msgBox.className = "text-xs font-bold mt-2 text-red-500";
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/check-coupon', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: JSON.stringify({ coupon_code: codeInput, email: emailInput })
+                });
+                
+                const data = await response.json();
+                if(data.success) {
+                    discountPercent = data.discount_percent; 
+                    document.getElementById('hidden_coupon_code').value = codeInput; 
+                    msgBox.innerText = "✅ " + data.message;
+                    msgBox.className = "text-xs font-bold mt-2 text-green-600";
+                } else {
+                    discountPercent = 0;
+                    document.getElementById('hidden_coupon_code').value = '';
+                    msgBox.innerText = "❌ " + data.message;
+                    msgBox.className = "text-xs font-bold mt-2 text-red-500";
+                }
+            } catch (error) {
+                console.error(error);
+                msgBox.innerText = "❌ Lỗi kết nối mạng, vui lòng thử lại!";
+                msgBox.className = "text-xs font-bold mt-2 text-red-500";
+            }
+        }
 
         function updateRoomConfig() {
             const select = document.getElementById('roomSelect');
@@ -180,13 +239,14 @@
             const base = isSingle ? 1 : 2;
             const max = isSingle ? 2 : 3;
             
-            document.getElementById('rule_text').innerHTML = `💡 Quy định: Phòng này tiêu chuẩn <b>${base} người</b>, tối đa <b>${max} người</b>. Phụ thu <b>${surchargeRate.toLocaleString()}đ</b> cho người vượt quá tiêu chuẩn.`;
+            // Tính số tiền phụ thu 20% mỗi đêm để hiện ra text cho khách dễ hiểu
+            const surchargeRatePerDay = currentPrice * 0.20;
+            
+            document.getElementById('rule_text').innerHTML = `💡 Quy định: Phòng này tiêu chuẩn <b>${base} người</b>, tối đa <b>${max} người</b>. Phụ thu <b>20% giá phòng/đêm</b> (${surchargeRatePerDay.toLocaleString()}đ/người) cho người vượt quá tiêu chuẩn.`;
 
-            // Gọi hàm tính toán lại giới hạn người khi đổi loại phòng
             checkGuestLimit();
         }
 
-        // HÀM MỚI: KIỂM TRA VÀ CHẶN SỐ LƯỢNG NGƯỜI REAL-TIME
         function checkGuestLimit() {
             const roomInput = document.getElementById('room_count');
             const guestInput = document.getElementById('guest_count');
@@ -197,13 +257,11 @@
             const maxPax = isSingle ? 2 : 3;
             const maxAllowed = rooms * maxPax;
 
-            // Set cứng thuộc tính max cho ô input để giới hạn mũi tên click
             guestInput.max = maxAllowed;
 
-            // Nếu khách cố tình gõ phím số lớn hơn giới hạn
             if (guests > maxAllowed) {
                 alert(`⚠️ VƯỢT QUÁ GIỚI HẠN!\n\nVới ${rooms} phòng bạn chọn, hệ thống chỉ cho phép lưu trú tối đa ${maxAllowed} người (Quy định: ${maxPax} người/phòng).\n\nVui lòng TĂNG SỐ LƯỢNG PHÒNG lên nếu bạn đi đông người hơn!`);
-                guestInput.value = maxAllowed; // Tự động ép số về mức tối đa
+                guestInput.value = maxAllowed;
             }
         }
 
@@ -212,7 +270,6 @@
             const checkinInput = document.getElementById('checkin');
             const checkoutInput = document.getElementById('checkout');
 
-            // --- Lắng nghe sự kiện gõ phím/click ở ô Số lượng ---
             document.getElementById('room_count').addEventListener('input', checkGuestLimit);
             document.getElementById('guest_count').addEventListener('input', checkGuestLimit);
 
@@ -251,7 +308,7 @@
             });
 
             initDatePickers(roomSelect.value);
-            updateRoomConfig(); // Cập nhật text quy định nếu đã chọn phòng sẵn
+            updateRoomConfig(); 
         });
 
         // ==========================================
@@ -260,8 +317,6 @@
         function openConfirmModal() {
             const form = document.getElementById('checkoutForm');
             
-            // Ép form tự kiểm tra lỗi (VD: SĐT chưa đủ 10 số, thiếu tên).
-            // Nếu có lỗi, trình duyệt sẽ báo đỏ và return luôn, KHÔNG bật Modal.
             if (!form.reportValidity()) {
                 return;
             }
@@ -281,54 +336,67 @@
                 return;
             }
 
-            // Tính số ngày ở
             const inDate = new Date(checkIn);
             const outDate = new Date(checkOut);
             let days = Math.round((outDate - inDate) / (1000 * 60 * 60 * 24));
             if(days <= 0 || isNaN(days)) days = 1;
 
-            // Tính quy định số người
             const basePax = isSingle ? 1 : 2;
             const maxPax = isSingle ? 2 : 3;
             const baseAllowed = rooms * basePax;
             const maxAllowed = rooms * maxPax;
 
-            // Lớp bảo vệ thứ 2 trước khi mở Modal
             if (guests > maxAllowed) {
                 alert(`LỖI: ${rooms} phòng này chỉ cho phép tối đa ${maxAllowed} người lưu trú.\nVui lòng tăng số lượng phòng hoặc giảm số lượng người.`);
                 return;
             }
 
-            // Tính phụ thu
+            // TÍNH PHỤ THU 20% GIÁ PHÒNG
             let surcharge = 0;
             if (guests > baseAllowed) {
                 let extraPeople = guests - baseAllowed;
-                surcharge = extraPeople * surchargeRate;
+                const surchargeRatePerDay = currentPrice * 0.20; // 20% giá phòng
+                surcharge = extraPeople * surchargeRatePerDay * days;
             }
 
-            // Tính tổng tiền = (Giá phòng * số phòng * số ngày) + Phụ thu
-            let total = (currentPrice * rooms * days) + surcharge;
+            // Tính tiền tạm thời (chưa trừ discount)
+            let tempTotal = (currentPrice * rooms * days) + surcharge;
 
-            // Đổ dữ liệu ra Modal
+            // Tính tiền giảm giá
+            let discountAmount = 0;
+            if(discountPercent > 0) {
+                discountAmount = tempTotal * (discountPercent / 100);
+            }
+
+            // Tổng thực tế
+            let finalTotal = tempTotal - discountAmount;
+
             document.getElementById('modal_name').innerText = name;
             document.getElementById('modal_rooms').innerText = rooms;
             document.getElementById('modal_guests').innerText = guests;
             document.getElementById('modal_days').innerText = days;
             
+            // ẨN / HIỆN DÒNG PHỤ THU NẾU > 0
             if(surcharge > 0) {
                 document.getElementById('surcharge_box').classList.remove('hidden');
                 document.getElementById('modal_surcharge').innerText = surcharge.toLocaleString() + 'đ';
             } else {
                 document.getElementById('surcharge_box').classList.add('hidden');
             }
+
+            // ẨN / HIỆN DÒNG GIẢM GIÁ NẾU > 0
+            if(discountAmount > 0) {
+                document.getElementById('discount_box').classList.remove('hidden');
+                document.getElementById('modal_discount').innerText = '-' + discountAmount.toLocaleString() + 'đ';
+            } else {
+                document.getElementById('discount_box').classList.add('hidden');
+            }
             
-            document.getElementById('modal_total').innerText = total.toLocaleString() + 'đ';
+            document.getElementById('modal_total').innerText = finalTotal.toLocaleString() + 'đ';
 
-            // Lưu tiền vào form ẩn để gửi lên Controller
             document.getElementById('hidden_surcharge').value = surcharge;
-            document.getElementById('hidden_total').value = total;
+            document.getElementById('hidden_total').value = finalTotal;
 
-            // Hiển thị Modal
             const modal = document.getElementById('confirmModal');
             const content = document.getElementById('modalContent');
             modal.classList.remove('hidden');
