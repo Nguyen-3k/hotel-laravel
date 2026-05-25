@@ -105,9 +105,6 @@
                                             <span>📜</span> Danh sách giao dịch
                                         </a>
                                         
-                                        <a href="/my-bookings" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition">
-                                            <span>💰</span> Hoàn tiền
-                                        </a>
                                     @endif
                                 </div>
                                 

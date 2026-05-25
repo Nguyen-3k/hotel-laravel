@@ -22,6 +22,27 @@
             border-top: 1px dashed #000;
             margin: 10px 0;
         }
+
+        /* THÊM MỚI: CSS ẨN WEBSITE KHI BẤM NÚT IN (Chỉ in Hóa đơn) */
+        @media print {
+            body * {
+                visibility: hidden; /* Ẩn mọi thứ trên trang */
+            }
+            #printArea, #printArea * {
+                visibility: visible; /* Chỉ hiện vùng có id="printArea" */
+            }
+            #printArea {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                max-width: 100%; /* Bỏ giới hạn chiều rộng để vừa giấy in bill */
+                border: none;
+                box-shadow: none;
+                padding: 0;
+                margin: 0;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -286,11 +307,15 @@
             </div>
 
             <div class="flex gap-2 pt-6">
-                <button type="button" onclick="closeCheckoutModal()" class="w-1/3 bg-gray-400 text-white font-bold py-2 rounded transition">Quay lại</button>
+                <button type="button" onclick="closeCheckoutModal()" class="w-1/4 bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 rounded transition text-sm">Đóng</button>
                 
-                <form id="checkoutForm" method="POST" class="w-2/3 m-0">
+                <button type="button" onclick="window.print()" class="w-1/4 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 rounded transition shadow-md text-sm">
+                    🖨️ In Bill
+                </button>
+                
+                <form id="checkoutForm" method="POST" class="w-2/4 m-0">
                     @csrf
-                    <button type="submit" onclick="return confirm('Xác nhận đã thu đủ tiền và trả phòng?')" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded transition shadow-md">
+                    <button type="submit" onclick="return confirm('Xác nhận đã thu đủ tiền và trả phòng?')" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded transition shadow-md text-sm">
                         💸 Đã Thu Tiền & Check-out
                     </button>
                 </form>
@@ -315,7 +340,7 @@
             document.getElementById('checkinModal').classList.add('hidden');
         }
 
-        // Logic Modal Check-out (Tính toán tiền 30/70)
+        // Logic Modal Check-out
         function openCheckoutModal(id, name, room, checkIn, checkOut, totalAmount) {
             document.getElementById('bill_id').innerText = id;
             document.getElementById('bill_name').innerText = name;
@@ -323,7 +348,6 @@
             document.getElementById('bill_in').innerText = checkIn;
             document.getElementById('bill_out').innerText = checkOut;
 
-            // Tính tiền Cọc 30% và Còn lại 70%
             let deposit = Math.round(totalAmount * 0.3);
             let remaining = totalAmount - deposit;
 
