@@ -68,6 +68,10 @@
                                 <span class="bg-red-100 text-red-800 text-xs font-bold px-3 py-1.5 rounded-full border border-red-200 flex items-center gap-1">
                                     ❌ Đơn hàng đã hủy
                                 </span>
+                            @elseif($booking->status === 'completed')
+                                <span class="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1.5 rounded-full border border-blue-200 flex items-center gap-1">
+                                    🌟 Đã trả phòng (Hoàn tất)
+                                </span>
                             @endif
                         </div>
                     </div>
@@ -127,6 +131,47 @@
                                 </button>
                             </div>
                         </form>
+                    @endif
+
+                    @if($booking->status === 'completed')
+                        @php
+                            $hasReviewed = \App\Models\Review::where('booking_id', $booking->id)->exists();
+                        @endphp
+
+                        @if(!$hasReviewed)
+                            <div class="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-5 shadow-inner">
+                                <h4 class="font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2">⭐ Đánh giá trải nghiệm của bạn</h4>
+                                <form action="/submit-review" method="POST" class="space-y-4">
+                                    @csrf
+                                    <input type="hidden" name="room_id" value="{{ $booking->room_id }}">
+                                    <input type="hidden" name="booking_id" value="{{ $booking->id }}">
+                                    
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-700 mb-2">Đánh giá số sao (1-5) <span class="text-red-500">*</span></label>
+                                        <div class="flex flex-wrap gap-4">
+                                            <label class="cursor-pointer flex items-center gap-1 bg-white px-3 py-1.5 rounded border border-gray-200 hover:bg-blue-50 transition"><input type="radio" name="rating" value="1" required class="accent-blue-600"> 1⭐</label>
+                                            <label class="cursor-pointer flex items-center gap-1 bg-white px-3 py-1.5 rounded border border-gray-200 hover:bg-blue-50 transition"><input type="radio" name="rating" value="2" class="accent-blue-600"> 2⭐</label>
+                                            <label class="cursor-pointer flex items-center gap-1 bg-white px-3 py-1.5 rounded border border-gray-200 hover:bg-blue-50 transition"><input type="radio" name="rating" value="3" class="accent-blue-600"> 3⭐</label>
+                                            <label class="cursor-pointer flex items-center gap-1 bg-white px-3 py-1.5 rounded border border-gray-200 hover:bg-blue-50 transition"><input type="radio" name="rating" value="4" class="accent-blue-600"> 4⭐</label>
+                                            <label class="cursor-pointer flex items-center gap-1 bg-white px-3 py-1.5 rounded border border-blue-300 bg-blue-50 transition"><input type="radio" name="rating" value="5" checked class="accent-blue-600"> 5⭐</label>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-700 mb-1">Nhận xét của bạn (Không bắt buộc)</label>
+                                        <textarea name="comment" rows="2" class="w-full text-sm border border-gray-300 rounded-lg p-2.5 focus:outline-blue-500" placeholder="Phòng sạch sẽ, nhân viên nhiệt tình, view đẹp..."></textarea>
+                                    </div>
+
+                                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg text-sm transition shadow-sm cursor-pointer">
+                                        GỬI ĐÁNH GIÁ
+                                    </button>
+                                </form>
+                            </div>
+                        @else
+                            <div class="mt-4 bg-green-50 border border-green-200 rounded-xl p-3 text-center text-sm font-bold text-green-700 shadow-inner">
+                                ✅ Bạn đã đánh giá trải nghiệm cho phòng này. Cảm ơn bạn!
+                            </div>
+                        @endif
                     @endif
 
                 </div>
