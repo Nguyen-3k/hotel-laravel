@@ -50,6 +50,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/my-bookings', [HotelController::class, 'myBookings']); 
     Route::post('/my-bookings/{id}/refund', [HotelController::class, 'requestRefund']);
     
+    // Gửi đánh giá sau khi ở
+    Route::post('/submit-review', [App\Http\Controllers\HotelController::class, 'submitReview'])->middleware('auth');
     // API Đánh dấu đã đọc thông báo
     Route::post('/notifications/mark-all-read', [HotelController::class, 'markAllNotificationsAsRead']);
     // API Quét thông báo mới cho Khách hàng (Real-time)

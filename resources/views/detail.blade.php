@@ -6,11 +6,11 @@
     <title>Chi Tiết Phòng - Thiên Ân Hotel</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-50 text-gray-800">
+<body class="bg-gray-50 text-gray-800 flex flex-col min-h-screen">
     
     @include('header')
 
-    <main class="container mx-auto py-12 px-4 max-w-5xl">
+    <main class="container mx-auto py-12 px-4 max-w-5xl flex-grow">
         <div class="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl shadow-lg p-4 mb-8 text-white flex flex-col md:flex-row justify-between items-center transform hover:scale-[1.01] transition duration-300">
             <div class="flex items-center gap-4">
                 <span class="text-4xl">🎁</span>
@@ -114,5 +114,8 @@
             @endif
         </div>
     </main>
+
+    @include('footer')
+
 </body>
 </html>
